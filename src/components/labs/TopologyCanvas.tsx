@@ -11,6 +11,8 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import {
+  computeHsrpTable,
+  getTopologyStpBlockingLinks,
   isPhysicalInterfaceUp,
   type NetworkDevice,
   type NetworkState,
@@ -209,6 +211,8 @@ export function TopologyCanvas({
   onReplayTrace,
 }: TopologyCanvasProps) {
   const devices = Object.values(networkState.devices);
+  const stpBlockingLinks = getTopologyStpBlockingLinks(networkState);
+  const hsrpEntries = computeHsrpTable(networkState);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-800/90 bg-[#0d1322] shadow-lg shadow-black/30">
@@ -229,6 +233,10 @@ export function TopologyCanvas({
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-rose-500" />
             Link Down
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0.5 w-3.5 border-t-2 border-dashed border-orange-400" />
+            STP BLK
           </span>
           <span className="hidden items-center gap-1 text-cyan-300/90 sm:inline-flex">
             <MousePointerClick className="h-3.5 w-3.5" />
@@ -257,10 +265,10 @@ export function TopologyCanvas({
             currentHop.status === "error" &&
             currentHopDevice;
 
-          const bubbleX = showErrorBubble
+          const bubbleX = currentHopDevice
             ? Math.max(14, Math.min(430, currentHopDevice.position.x - 115))
             : 0;
-          const bubbleY = showErrorBubble
+          const bubbleY = currentHopDevice
             ? Math.max(
                 10,
                 currentHopDevice.position.y > 120
@@ -324,6 +332,8 @@ export function TopologyCanvas({
                               link.toInterface,
                             ))));
 
+                    const stpBlock = up ? stpBlockingLinks[link.id] : undefined;
+
                     return (
                       <g key={link.id}>
                         <line
@@ -331,10 +341,16 @@ export function TopologyCanvas({
                           y1={y1}
                           x2={x2}
                           y2={y2}
-                          stroke={up ? "#10b981" : "#f43f5e"}
+                          stroke={
+                            !up
+                              ? "#f43f5e"
+                              : stpBlock
+                                ? "#f97316"
+                                : "#10b981"
+                          }
                           strokeWidth={isHighlightedByHop ? 4 : 2.5}
                           strokeOpacity={up ? 0.85 : 0.75}
-                          strokeDasharray={up ? undefined : "6 4"}
+                          strokeDasharray={!up || stpBlock ? "6 4" : undefined}
                         />
                         <text
                           x={fromLabelX}
@@ -358,6 +374,41 @@ export function TopologyCanvas({
                         >
                           {link.toInterface}
                         </text>
+                        {stpBlock && (
+                          <g
+                            transform={`translate(${
+                              stpBlock.blockedSide === "from"
+                                ? x1 + dx * 0.22 - nx * 1.35
+                                : x1 + dx * 0.78 - nx * 1.35
+                            }, ${
+                              stpBlock.blockedSide === "from"
+                                ? y1 + dy * 0.22 - ny * 1.35
+                                : y1 + dy * 0.78 - ny * 1.35
+                            })`}
+                          >
+                            <rect
+                              x={-16}
+                              y={-9}
+                              width={32}
+                              height={16}
+                              rx={4}
+                              fill="#431407"
+                              stroke="#f97316"
+                              strokeWidth={1.2}
+                            />
+                            <text
+                              x={0}
+                              y={2}
+                              textAnchor="middle"
+                              fill="#fdba74"
+                              fontSize={9}
+                              fontFamily="monospace"
+                              fontWeight={700}
+                            >
+                              BLK
+                            </text>
+                          </g>
+                        )}
                       </g>
                     );
                   })}
@@ -368,6 +419,11 @@ export function TopologyCanvas({
                     const isSelected = device.id === selectedDeviceId;
                     const ipLabel = getDeviceDisplayIp(device);
                     const isHopTarget = currentHop?.deviceId === device.id;
+                    const deviceHsrp = hsrpEntries.find(
+                      (e) =>
+                        e.deviceId === device.id &&
+                        (e.state === "Active" || e.state === "Standby"),
+                    );
 
                     return (
                       <g
@@ -463,6 +519,44 @@ export function TopologyCanvas({
                             {ipLabel}
                           </text>
                         )}
+
+                        {deviceHsrp && (
+                          <g transform={`translate(0, ${ipLabel ? 63 : 49})`}>
+                            <rect
+                              x={-35}
+                              y={-8}
+                              width={70}
+                              height={15}
+                              rx={7}
+                              fill={
+                                deviceHsrp.state === "Active"
+                                  ? "#064e3b"
+                                  : "#451a03"
+                              }
+                              stroke={
+                                deviceHsrp.state === "Active"
+                                  ? "#10b981"
+                                  : "#f59e0b"
+                              }
+                              strokeWidth={1}
+                            />
+                            <text
+                              x={0}
+                              y={2}
+                              textAnchor="middle"
+                              fill={
+                                deviceHsrp.state === "Active"
+                                  ? "#6ee7b7"
+                                  : "#fcd34d"
+                              }
+                              fontSize={8.5}
+                              fontFamily="monospace"
+                              fontWeight={700}
+                            >
+                              HSRP {deviceHsrp.state === "Active" ? "ACT" : "STBY"}
+                            </text>
+                          </g>
+                        )}
                       </g>
                     );
                   })}
@@ -514,11 +608,55 @@ export function TopologyCanvas({
                     </motion.g>
                   )}
 
+                  {/* NAT Translation Callout Pill */}
+                  {currentHop?.natTranslation && (
+                    <g
+                      transform={`translate(${Math.min(bubbleX, 390)}, ${
+                        showErrorBubble ? Math.max(10, bubbleY - 48) : bubbleY
+                      })`}
+                    >
+                      <rect
+                        width={270}
+                        height={40}
+                        rx={8}
+                        fill="#062231"
+                        stroke="#22d3ee"
+                        strokeWidth={1.5}
+                      />
+                      <text
+                        x={10}
+                        y={16}
+                        fill="#67e8f9"
+                        fontSize={10}
+                        fontFamily="monospace"
+                        fontWeight={700}
+                      >
+                        NAPT TRANSLATION ({currentHop.hostname})
+                      </text>
+                      <text
+                        x={10}
+                        y={32}
+                        fill="#cffafe"
+                        fontSize={10.5}
+                        fontFamily="monospace"
+                      >
+                        {currentHop.natTranslation.beforeIp}
+                        {currentHop.natTranslation.beforePort !== undefined
+                          ? `:${currentHop.natTranslation.beforePort}`
+                          : ""}{" "}
+                        → {currentHop.natTranslation.afterIp}
+                        {currentHop.natTranslation.afterPort !== undefined
+                          ? `:${currentHop.natTranslation.afterPort}`
+                          : ""}
+                      </text>
+                    </g>
+                  )}
+
                   {/* Failure Callout Bubble */}
                   {showErrorBubble && currentHop && (
-                    <g transform={`translate(${bubbleX}, ${bubbleY})`}>
+                    <g transform={`translate(${Math.min(bubbleX, 375)}, ${bubbleY})`}>
                       <rect
-                        width={230}
+                        width={290}
                         height={54}
                         rx={8}
                         fill="#2a0a16"
@@ -529,11 +667,12 @@ export function TopologyCanvas({
                         x={10}
                         y={19}
                         fill="#fda4af"
-                        fontSize={11}
+                        fontSize={10}
                         fontFamily="monospace"
                         fontWeight={700}
                       >
-                        ERROR: {currentHop.errorReason ?? activeTrace.failureReason}
+                        ERROR:{" "}
+                        {(currentHop.errorReason ?? activeTrace.failureReason ?? "").slice(0, 38)}
                       </text>
                       <text
                         x={10}
@@ -542,8 +681,8 @@ export function TopologyCanvas({
                         fontSize={10}
                         fontFamily="sans-serif"
                       >
-                        {currentHop.action.length > 30
-                          ? `${currentHop.action.slice(0, 30)}...`
+                        {currentHop.action.length > 36
+                          ? `${currentHop.action.slice(0, 36)}...`
                           : currentHop.action}
                       </text>
                     </g>
@@ -595,17 +734,32 @@ export function TopologyCanvas({
                     </div>
 
                     {currentHop && (
-                      <p
-                        className={cn(
-                          "rounded-md border px-3 py-1.5 font-mono text-xs",
-                          currentHop.status === "error"
-                            ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
-                            : "border-slate-800 bg-[#05080f] text-slate-300",
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p
+                          className={cn(
+                            "rounded-md border px-3 py-1.5 font-mono text-xs",
+                            currentHop.status === "error"
+                              ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
+                              : "border-slate-800 bg-[#05080f] text-slate-300",
+                          )}
+                        >
+                          [{currentHop.layer} / {currentHop.hostname}]{" "}
+                          {currentHop.action}
+                        </p>
+                        {currentHop.natTranslation && (
+                          <span className="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 font-mono text-xs font-medium text-cyan-200">
+                            NAT:{" "}
+                            {currentHop.natTranslation.beforeIp}
+                            {currentHop.natTranslation.beforePort !== undefined
+                              ? `:${currentHop.natTranslation.beforePort}`
+                              : ""}{" "}
+                            → {currentHop.natTranslation.afterIp}
+                            {currentHop.natTranslation.afterPort !== undefined
+                              ? `:${currentHop.natTranslation.afterPort}`
+                              : ""}
+                          </span>
                         )}
-                      >
-                        [{currentHop.layer} / {currentHop.hostname}]{" "}
-                        {currentHop.action}
-                      </p>
+                      </div>
                     )}
                   </div>
                 ) : (

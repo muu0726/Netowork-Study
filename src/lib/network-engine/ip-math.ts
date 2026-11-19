@@ -308,3 +308,35 @@ export function longestPrefixMatch<T extends RouteLookupEntry>(
 
   return bestRoute;
 }
+
+/**
+ * Cisco IOS ワイルドカードマスク評価（0 = 一致必須ビット、1 = 無視ビット）。
+ * 非連続ビットのワイルドカードマスクも 32bit 符号なし演算で厳密に評価する。
+ */
+export function matchesWildcard(
+  ip: string,
+  ruleIp: string,
+  wildcard: string,
+): boolean {
+  const ipInt = ipv4ToInt(ip);
+  const ruleInt = ipv4ToInt(ruleIp);
+  const wildcardInt = ipv4ToInt(wildcard);
+  const checkMask = (~wildcardInt) >>> 0;
+  return ((ipInt & checkMask) >>> 0) === ((ruleInt & checkMask) >>> 0);
+}
+
+/**
+ * 指定 IP が [startIp, endIp] の範囲内（両端含む）にあるかを 32bit 符号なし整数で判定する。
+ */
+export function isIpInRange(
+  ip: string,
+  startIp: string,
+  endIp: string,
+): boolean {
+  const ipInt = ipv4ToInt(ip);
+  const startInt = ipv4ToInt(startIp);
+  const endInt = ipv4ToInt(endIp);
+  const low = Math.min(startInt, endInt);
+  const high = Math.max(startInt, endInt);
+  return ipInt >= low && ipInt <= high;
+}

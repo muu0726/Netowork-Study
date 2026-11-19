@@ -21,7 +21,7 @@ export interface ScenarioMeta {
 }
 
 export interface ToolMeta {
-  id: "subnet" | "wireshark" | "config-review";
+  id: "subnet" | "wireshark" | "config-review" | "ipv6";
   title: string;
   badge: string;
   summary: string;
@@ -170,6 +170,30 @@ export const LESSONS_META: LessonMeta[] = [
     summary: "EXEC・コンフィグモード遷移、省略入力、showコマンド、running-config管理を体得します。",
     estimatedMinutes: 15,
   },
+  {
+    id: "stage2/ipv6-fundamentals",
+    stage: "stage-2",
+    slug: "ipv6-fundamentals",
+    title: "IPv6基礎（アドレス構造・圧縮ルール・SLAAC / NDP）",
+    summary: "128bitのIPv6アドレス表記、RFC 5952準拠のゼロ圧縮、GUA/リンクローカル/ULA、およびARPに代わるNDPの仕組みを学びます。",
+    estimatedMinutes: 25,
+  },
+  {
+    id: "stage2/network-management",
+    stage: "stage-2",
+    slug: "network-management",
+    title: "ネットワーク管理・監視（SSH・CDP/LLDP・NTP・Syslog・SNMP）",
+    summary: "機器への安全なSSH接続設定、隣接機器発見(CDP/LLDP)、時刻同期(NTP)、ログ管理(Syslog)、およびSNMP監視の実務設定を学びます。",
+    estimatedMinutes: 20,
+  },
+  {
+    id: "stage2/l2-security-wireless",
+    stage: "stage-2",
+    slug: "l2-security-wireless",
+    title: "L2セキュリティと無線LAN（Port Security・DHCP Snooping・WLC/WPA3）",
+    summary: "スイッチポートレベルでの不正PC接続防御（Port Security・DHCP Snooping・DAI）と、法人無線LAN（WLC/CAPWAP・WPA2/WPA3）のアーキテクチャを学びます。",
+    estimatedMinutes: 25,
+  },
 
   // Stage 3: 実務・最新トレンド
   {
@@ -203,6 +227,14 @@ export const LESSONS_META: LessonMeta[] = [
     title: "ネットワーク自動化・REST API・AI運用 (NetOps)",
     summary: "YAML/JSONによる構成管理、Ansible・RESTCONF、LLMを活用した次世代障害調査を展望します。",
     estimatedMinutes: 20,
+  },
+  {
+    id: "stage3/web-modern-network",
+    stage: "stage-3",
+    slug: "web-modern-network",
+    title: "Webインフラとモダンネットワーク（TLS 1.3・LB・BGP・コンテナ網）",
+    summary: "実務のWebサービスを支えるTLS 1.3ハンドシェイク、L4/L7ロードバランサ(XFFヘッダ・SSL終端)、インターネットBGP基礎、Dockerブリッジネットワークを学びます。",
+    estimatedMinutes: 25,
   },
 ];
 
@@ -247,6 +279,98 @@ export const SCENARIOS_META: ScenarioMeta[] = [
     difficulty: "実践",
     summary: "誤ったスタティックルートの削除（no ip route）と戻りルートの補完で拠点間通信を復旧します。",
   },
+  {
+    id: "cli-nat-acl-web",
+    title: "社内LANからインターネットへのNAPT（PAT）とWebアクセス許可ACL",
+    category: "lab",
+    stage: "stage-3",
+    difficulty: "実践",
+    summary: "NAPT（overload）でプライベートIPをWAN IPへ変換し、拡張ACLでHTTP(80)のみ許可・Telnet(23)を遮断します。",
+  },
+  {
+    id: "ts-acl-web-blocked",
+    title: "「特定の部署だけWebサーバ（TCP 80）に繋がらない」",
+    category: "troubleshoot",
+    stage: "stage-3",
+    difficulty: "中級",
+    summary: "Telnet禁止要件を保ったまま、暗黙のdenyにより遮断されていた営業部のHTTP通信をACL修正で復旧します。",
+  },
+  {
+    id: "ts-dhcp-failure",
+    title: "「新規PCにIPアドレスが自動配布されない」",
+    category: "troubleshoot",
+    stage: "stage-3",
+    difficulty: "中級",
+    summary: "DHCPプールのネットワーク不一致と過剰な除外設定（excluded-address）を修復し自動取得を復旧します。",
+  },
+  {
+    id: "cli-ospf-cost",
+    title: "3台ルータ構成でのOSPFシングルエリア構築とコスト制御",
+    category: "lab",
+    stage: "stage-3",
+    difficulty: "実践",
+    summary: "OSPF Area 0 ネイバー確立とインターフェースコスト変更によるダイクストラ最短経路の誘導を実践します。",
+  },
+  {
+    id: "cli-stp-root-bridge",
+    title: "STPルートブリッジ選出と冗長リンクのブロッキング制御",
+    category: "lab",
+    stage: "stage-3",
+    difficulty: "中級",
+    summary: "STP プライオリティ変更によりルートブリッジを制御し、L2 ループ防止 (BLK) の再配置を確認します。",
+  },
+  {
+    id: "ts-ospf-neighbor-down",
+    title: "「OSPFネイバーが確立せず対向拠点へ到達できない」",
+    category: "troubleshoot",
+    stage: "stage-3",
+    difficulty: "中級",
+    summary: "Area ID 不一致とワイルドカードマスク誤りを切り分け、動的ルーティング収束を復旧します。",
+  },
+  {
+    id: "ts-hsrp-failover-broken",
+    title: "「冗長化構成でActiveルータが落ちたのに通信が復旧しない」",
+    category: "troubleshoot",
+    stage: "stage-3",
+    difficulty: "実践",
+    summary: "HSRP グループ・仮想IP不一致と preempt 設定漏れを修復し、障害フェイルオーバーを正常化します。",
+  },
+  {
+    id: "ts-linux-nginx-down",
+    title: "「Pingは通るのにWebサイト(HTTP/HTTPS)がConnection refusedになる」",
+    category: "troubleshoot",
+    stage: "stage-3",
+    difficulty: "中級",
+    summary: "dig / ss -tulpn / systemctl / curl -v を駆使して Web サーバデーモン停止を切り分け・復旧します。",
+  },
+];
+
+export interface CloudScenarioMeta {
+  id: string;
+  title: string;
+  difficulty: "初級" | "中級" | "実践";
+  summary: string;
+}
+
+export const CLOUD_SCENARIOS_META: CloudScenarioMeta[] = [
+  {
+    id: "cloud-igw-sg-https",
+    title: "「Public SubnetのWebサーバに外部からHTTPSアクセスできない」",
+    difficulty: "中級",
+    summary: "IGW向けデフォルトルート (0.0.0.0/0) の追加と、ステートフル Security Group の443許可を実践します。",
+  },
+  {
+    id: "cloud-nacl-ephemeral",
+    title: "「NACLでインバウンド80番を許可したのにレスポンスが返らない」",
+    difficulty: "実践",
+    summary: "ステートレス NACL 特有の戻りトラフィック遮断を特定し、エフェメラルポート (1024-65535) を開放します。",
+  },
+  {
+    id: "cloud-private-nat-egress",
+    title: "「Private Subnetのアプリサーバから外部API(HTTPS 443)へ通信できない」",
+    difficulty: "実践",
+    summary: "Private Route Table から NAT Gateway への経路設定と SG 最小権限アウトバウンドを構築します。",
+  },
 ];
 
 export const TOOLS_META: ToolMeta[] = [
@@ -255,6 +379,12 @@ export const TOOLS_META: ToolMeta[] = [
     title: "サブネット計算機 & 演習ドリル",
     badge: "IPv4 / CIDR",
     summary: "32bitの2進数境界をリアルタイム色分け表示し、サブネット設計問題を反復演習できます。",
+  },
+  {
+    id: "ipv6",
+    title: "IPv6 圧縮・展開ツール & 種別クイズ",
+    badge: "IPv6 / RFC 5952",
+    summary: "IPv6の :: 最長ゼロ圧縮・完全展開ルールを色分け可視化し、GUA/LLA/ULA識別演習を行います。",
   },
   {
     id: "wireshark",

@@ -441,4 +441,137 @@ export const STAGE3_LESSONS: LessonArticle[] = [
       },
     ],
   },
+  {
+    id: "stage3/web-modern-network",
+    stage: "stage-3",
+    slug: "web-modern-network",
+    title: "Webインフラとモダンネットワーク（TLS 1.3・LB・BGP・コンテナ網）",
+    summary: "実務のWebサービスを支えるTLS 1.3ハンドシェイク、L4/L7ロードバランサ(XFFヘッダ・SSL終端)、インターネットBGP基礎、Dockerブリッジネットワークを学びます。",
+    estimatedMinutes: 25,
+    diagramVariant: "web-modern-network",
+    relatedHref: {
+      href: "/labs/cloud",
+      label: "クラウドVPCラボで体験",
+    },
+    glossary: [
+      {
+        term: "TLS 1.3 (1-RTT)",
+        shortDef: "TLS 1.2 の半分の往復回数 (1-RTT) で安全な暗号通信を確立する最新仕様。",
+        detail: "ClientHello に鍵共有パラメータ (ECDHE) を同梱するため 1往復で暗号確立が完了し、脆弱な RSA 鍵交換や CBC 暗号は廃止され Forward Secrecy (PFS) が必須化されています。",
+        layer: "L5 / L6 (TLS)",
+      },
+      {
+        term: "L7 ロードバランサ & XFF",
+        shortDef: "HTTP パス・Host ヘッダを見て振分や TLS 終端を行い、元IPを `X-Forwarded-For` で伝達する装置。",
+        detail: "リバースプロキシ型 LB はバックエンドへの代理接続を行うため、Web サーバログ上の送信元IPが LB 自身に見えます。元クライアントIP知るために XFF ヘッダを参照します。",
+        layer: "L7 (HTTP)",
+      },
+      {
+        term: "BGP (eBGP / AS Path)",
+        shortDef: "インターネット全体の AS（自律システム）間で経路を交換する唯一の Path Vector プロトコル。",
+        detail: "OSPF が社内の最短コストを選ぶのに対し、BGP (TCP 179) はポリシー（AS_PATH長・Local Preference 等）ベースで経路制御を行います。",
+        layer: "L3 (Inter-Domain)",
+      },
+      {
+        term: "Container Network (veth / NAT)",
+        shortDef: "Docker 等がホストOS内部に仮想ブリッジ (`docker0`) と veth ペアを作ってコンテナ間を接続する機構。",
+        detail: "コンテナは独自の Network Namespace を持ち、iptables NAT による `-p 8080:80` ポートフォワードで外部へ公開されます。",
+        layer: "Virtual L2/L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「暗号化・交通整理・巨大道路網・社内シェアハウス」を一つの地図に",
+      analogyText:
+        "モダンな Web サービスでは、ブラウザの暗号通信 (TLS 1.3) を玄関の L7 ロードバランサで受け止め、裏側の Docker コンテナ群へ振り分け、さらに外側では BGP が世界中の ISP を結んでいます。従来の CCNA 知識（L2/L3/NAT/TCP）がそのままアプリ基盤に応用されています。",
+      keyPoints: [
+        {
+          title: "なぜ L7 ロードバランサで SSL/TLS 終端するのか",
+          body: "証明書管理や復号のCPU負荷を LB（ALB や Nginx）へ集約でき、裏側のアプリサーバは平文 HTTP や内向き認証に専念でき、URL パス (`/api`, `/images`) ごとのルーティングも可能になるためです。",
+        },
+        {
+          title: "コンテナも実体は Linux Network Namespace + veth + Bridge",
+          body: "ブラックボックスに見えがちなコンテナ通信も、`veth` 仮想LANケーブルでホスト内の仮想L2スイッチ (`docker0` ブリッジ) に接続され、ホスト外へ出る際は NAPT (iptables MASQUERADE) されているだけです。",
+        },
+      ],
+      steps: [
+        "クライアントが DNS で名前解決し、LB と TCP 3ウェイ → TLS 1.3 ハンドシェイクを1往復で完了する",
+        "LB が HTTP リクエストを受け取り、`X-Forwarded-For` ヘッダを付与して健全なヘルスチェック通過中のコンテナへ転送する",
+        "クラウドやデータセンタ境界のインターネット通信は eBGP により冗長化されたマルチホーム ISP 経由で運ばれる",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "TLS 1.2 (2-RTT) と TLS 1.3 (1-RTT, 前方秘匿性必須) のハンドシェイク差、および eBGP (AD 20) vs iBGP (AD 200) は実務面接と資格双方の頻出項目です。",
+        "リバースプロキシ・LB 構成における「バックエンドアプリでアクセス元IPがLBのプライベートIPになってしまう現象」→ `X-Forwarded-For` の仕組みは即答できるよう整理しましょう。",
+      ],
+      referenceTable: {
+        headers: ["技術", "レイヤ / プロトコル", "代表的なチェックポイント"],
+        rows: [
+          ["TLS 1.3", "TCP 上 (443等)", "1-RTT 鍵交換 (ECDHE 必須)・0-RTT 再開・安全でない旧暗号廃止"],
+          ["L4 LB vs L7 LB", "L4 TCP/UDP vs L7 HTTP", "L4: 高速パススルー / L7: TLS終端・URL振分・X-Forwarded-For付与"],
+          ["BGP (eBGP / iBGP)", "TCP 179", "AS間制御、eBGP AD=20、AS_PATH でループ防止・最短AS選択"],
+          ["Docker Bridge網", "Linux Namespace + NAT", "`docker0` ブリッジ + `veth` ペア、`-p ホスト:コンテナ` でNAPT公開"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Nginx リバースプロキシ / TLS 1.3 / X-Forwarded-For 例",
+          code: `server {
+    listen 443 ssl;
+    ssl_protocols TLSv1.3 TLSv1.2;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}`,
+          note: "`curl -v https://...` を実行すると ALPN・TLSv1.3 ハンドシェイクとサーバ証明書検証の流れを直接観察できます。",
+        },
+      ],
+      pitfalls: [
+        "LB 配下でクライアントIP制限（ACL/WAF）を行いたい場合、直前の `remote_addr` ではなく LB が付与する信頼済み `X-Forwarded-For`（または AWS Proxy Protocol）を参照しないと全アクセスが LB の IP に見えてしまいます。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-webmod-1",
+        question: "TLS 1.3 が TLS 1.2 に比べて初期ハンドシェイクの往復回数 (RTT) を 2-RTT から 1-RTT へ半減できた最大の理由はどれですか？",
+        choices: [
+          "TCP 3ウェイハンドシェイクを完全に省略しているため",
+          "最初の ClientHello に鍵共有パラメータ (Key Share / ECDHE) を同梱して送るため",
+          "暗号化処理をすべてクライアント側のみに任せるため",
+          "証明書検証を行わないため",
+        ],
+        correctIndex: 1,
+        explanation:
+          "TLS 1.3 では安全な鍵交換方式 (ECDHE) に絞り、クライアントが最初から予測した鍵共有パラメータを ClientHello に載せることで 1-RTT 接続を実現しました。",
+      },
+      {
+        id: "q-webmod-2",
+        question: "L7 リバースプロキシ / ALB の背後にあるアプリケーションサーバ側で、ロードバランサのIPではなく「元のクライアントIPアドレス」を取得したいときに参照する代表的な HTTP ヘッダはどれですか？",
+        choices: [
+          "Content-Type",
+          "X-Forwarded-For",
+          "Cache-Control",
+          "WWW-Authenticate",
+        ],
+        correctIndex: 1,
+        explanation:
+          "L7 LB は一度コネクションを終端してバックエンドへ新規接続するため、元の送信元IPを `X-Forwarded-For` ヘッダに追記して引き継ぎます。",
+      },
+      {
+        id: "q-webmod-3",
+        question: "BGP ピア確立のためにルータ間（TCP 上）で使用されるポート番号と、異なる AS 間で動作する際のデフォルト AD 値 (Cisco IOS) の組み合わせはどれですか？",
+        choices: [
+          "UDP 520 / AD 120",
+          "TCP 179 / AD 20 (eBGP)",
+          "IP Protocol 89 / AD 110",
+          "TCP 443 / AD 1",
+        ],
+        correctIndex: 1,
+        explanation:
+          "BGP は信頼性確保のため TCP ポート 179 を使用してネイバーを張り、別AS間の eBGP の AD 値は 20（同一AS内の iBGP は 200）です。",
+      },
+    ],
+  },
 ];

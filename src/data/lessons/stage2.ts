@@ -643,4 +643,398 @@ export const STAGE2_LESSONS: LessonArticle[] = [
       },
     ],
   },
+  {
+    id: "stage2/ipv6-fundamentals",
+    stage: "stage-2",
+    slug: "ipv6-fundamentals",
+    title: "IPv6基礎（アドレス構造・圧縮ルール・SLAAC / NDP）",
+    summary: "128bitのIPv6アドレス表記、RFC 5952準拠のゼロ圧縮、GUA/リンクローカル/ULA、およびARPに代わるNDPの仕組みを学びます。",
+    estimatedMinutes: 25,
+    diagramVariant: "ipv6-fundamentals",
+    relatedHref: {
+      href: "/tools",
+      label: "IPv6 圧縮・展開ツールを開く",
+    },
+    glossary: [
+      {
+        term: "GUA (2000::/3)",
+        shortDef: "Global Unicast Address。インターネット全体で到達可能なIPv6グローバルアドレス。",
+        detail: "IPv4のグローバルIPに相当し、先頭3bitが `001`（`2000::` 〜 `3fff:...`）から始まります。組織への割り当て標準は `/48`、LANサブネット標準は `/64` です。",
+        layer: "L3 (IPv6)",
+      },
+      {
+        term: "Link-Local (FE80::/10)",
+        shortDef: "同一リンク内でのみ通信可能な自動割り当てアドレス。",
+        detail: "ルータを越えて転送されません。IPv6を有効にした全インターフェースに必ず生成され、NDPやデフォルトゲートウェイ指定（`fe80::1` など）に使用されます。",
+        layer: "L3 (IPv6)",
+      },
+      {
+        term: "Unique Local (FC00::/7)",
+        shortDef: "IPv4のプライベートIPに相当する閉域網用IPv6アドレス。",
+        detail: "実務ではランダムな40bit Global IDを含む `FD00::/8` が使われます。NATなしで社内網やVPC間接続で重複しにくい設計が可能です。",
+        layer: "L3 (IPv6)",
+      },
+      {
+        term: "SLAAC & NDP",
+        shortDef: "Stateless Address Autoconfiguration / Neighbor Discovery Protocol。",
+        detail: "IPv6にはARPとブロードキャストが存在しません。ICMPv6ベースのNDP（RS/RA, NS/NA）により、ルータ情報を受け取ってDHCPサーバなしでも自動的にIPv6アドレス(SLAAC)を生成できます。",
+        layer: "L3 (ICMPv6)",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "長い番地を賢く省略する次世代アドレス体系",
+      analogyText:
+        "IPv4（約43億個）の枯渇を解決するため、IPv6は128bit（実質無限大）の住所空間を持ちます。32文字もの16進数は人間が読みにくいため、2つの省略ルール（①ブロック先頭の0を消す、②連続する0ブロック1箇所を `::` にする）でスッキリ表記します。",
+      keyPoints: [
+        {
+          title: "ゼロ省略の2大ルール（RFC 5952）",
+          body: "各ブロックの先頭の0（例: `0db8` → `db8`）は省略できます。さらに連続する複数の `0000` ブロックは **最も長い1箇所だけ** `::` に圧縮できます（2回 `::` を書くと何ブロック省略されたか逆算できなくなるため禁止）。",
+        },
+        {
+          title: "ブロードキャスト廃止とマルチキャスト活用",
+          body: "IPv6では全員宛てのブロードキャストを廃止し、必要なノード群だけが届くマルチキャスト（`FF00::/8`）と、ルータが配下の端末へプレフィックスを通知する RA（Router Advertisement）により効率的に通信します。",
+        },
+      ],
+      steps: [
+        "例 `2001:0db8:0000:0000:0000:0000:0000:0001` の各ブロック先頭ゼロを削除 → `2001:db8:0:0:0:0:0:1`",
+        "連続する最も長い `0` の並びを1箇所だけ `::` に置き換え → `2001:db8::1`",
+        "1つだけの `0` ブロック（例: `2001:db8:0:1::1` の第3ブロック）は `::` にせず `0` と書きます。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "CCNAでは「正しい短縮表記はどれか」「このIPv6アドレスの種類は何か」「EUI-64によるMACアドレス変換」が頻出です。",
+        "EUI-64 では 48bit MAC の中央に `fffe` を挿入し、先頭から7bit目（U/Lビット）を反転させます。",
+      ],
+      referenceTable: {
+        headers: ["IPv6 アドレス種別", "プレフィックス / 先頭", "IPv4 での相当・用途"],
+        rows: [
+          ["Global Unicast (GUA)", "2000::/3 (2001:...等)", "パブリックIP（インターネットルーティング可）"],
+          ["Unique Local (ULA)", "FC00::/7 (実務は FD00::/8)", "プライベートIP (RFC 1918相当・閉域網用)"],
+          ["Link-Local (LLA)", "FE80::/10", "APIPA (169.254.0.0/16)＋NDP・ルーティング次ホップ"],
+          ["Multicast", "FF00::/8 (ff02::1 全ノード)", "ブロードキャスト代替・OSPFv3 (ff02::5)"],
+          ["Loopback / Unspecified", "::1/128 , ::/128", "127.0.0.1 / 0.0.0.0"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Cisco IOS IPv6 ルーティング有効化と設定",
+          code: `R1(config)# ipv6 unicast-routing
+R1(config)# interface Gig0/0
+R1(config-if)# ipv6 address 2001:db8:10::1/64
+R1(config-if)# ipv6 address fe80::1 link-local
+R1(config-if)# no shutdown`,
+          note: "ルータで IPv6 パケット転送や RA 送信を行うにはグローバル設定で `ipv6 unicast-routing` が必須です。",
+        },
+        {
+          title: "IPv6 確認コマンド",
+          code: `R1# show ipv6 interface brief
+R1# show ipv6 route
+R1# show ipv6 neighbors`,
+          note: "`show ipv6 neighbors` は IPv4 の `show arp` に相当し、NDP で解決された隣接 MAC アドレスを表示します。",
+        },
+      ],
+      pitfalls: [
+        "1つのIPv6アドレス内に `::` を2回以上含める表記（例 `2001::1::1`）は完全に不正です。",
+        "ルータの `ipv6 unicast-routing` を有効化し忘れると、IF に IPv6 を振ってもパケットが転送されません。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-ipv6-1",
+        question: "完全表記 `2001:0db8:0000:0001:0000:0000:0000:0050` を RFC 5952 準拠で正しく最短圧縮した表記はどれですか？",
+        choices: [
+          "2001:db8::1::50",
+          "2001:db8::1:0:0:0:50",
+          "2001:db8:0:1::50",
+          "2001:db8:0:1::5",
+        ],
+        correctIndex: 2,
+        explanation:
+          "後半の連続3つのゼロブロックを `::` に圧縮するのが最長であり、単一のゼロである第3ブロックは `0` のまま、末尾の `0050` は先頭ゼロのみ削って `50` とします。",
+      },
+      {
+        id: "q-ipv6-2",
+        question: "アドレス `FE80::20C:29FF:FE10:1` の種別と特徴として正しいものはどれですか？",
+        choices: [
+          "Global Unicast (インターネット上で公開可能)",
+          "Link-Local (同一サブネット内限定・ルータ越え不可)",
+          "Unique Local (閉域網向け・別サブネット間ルーティング可)",
+          "Multicast (全ルータ宛て)",
+        ],
+        correctIndex: 1,
+        explanation:
+          "`FE80::/10` はリンクローカルアドレスです。同一データリンク内の通信や NDP / ダイナミックルーティングの次ホップとして使われ、ルータを越えて転送されません。",
+      },
+      {
+        id: "q-ipv6-3",
+        question: "IPv6 ネットワークにおいて、IPv4 の ARP に代わってIPアドレスから MAC アドレスを解決する仕組みはどれですか？",
+        choices: [
+          "RARP",
+          "NDP (ICMPv6 NS / NA)",
+          "DHCPv4 Relay",
+          "IGMP Snooping",
+        ],
+        correctIndex: 1,
+        explanation:
+          "IPv6 ではブロードキャストと ARP を廃止し、ICMPv6 の Neighbor Solicitation (NS) と Neighbor Advertisement (NA) を使った NDP でアドレス解決を行います。",
+      },
+    ],
+  },
+  {
+    id: "stage2/network-management",
+    stage: "stage-2",
+    slug: "network-management",
+    title: "ネットワーク管理・監視（SSH・CDP/LLDP・NTP・Syslog・SNMP）",
+    summary: "機器への安全なSSH接続設定、隣接機器発見(CDP/LLDP)、時刻同期(NTP)、ログ管理(Syslog)、およびSNMP監視の実務設定を学びます。",
+    estimatedMinutes: 20,
+    diagramVariant: "network-management",
+    glossary: [
+      {
+        term: "SSH (TCP 22)",
+        shortDef: "公開鍵・共通鍵暗号で通信内容を保護する安全なリモートログインプロトコル。",
+        detail: "Telnet (TCP 23) は平文でパスワードが盗聴されるため本番環境では禁止され、`transport input ssh` で VTY 回線を SSH 限定にします。",
+        layer: "L7 (Management)",
+      },
+      {
+        term: "CDP / LLDP",
+        shortDef: "隣接スイッチ・ルータの機器名や対向ポート番号をL2で自動検出するプロトコル。",
+        detail: "CDP は Cisco 独自、LLDP (IEEE 802.1AB) はマルチベンダ対応の標準規格です。物理配線図がない現場での接続確認 (`show cdp neighbors`) に不可欠です。",
+        layer: "L2",
+      },
+      {
+        term: "NTP (UDP 123)",
+        shortDef: "ネットワーク機器やサーバの時刻を基準時計 (Stratum) と精密に同期するプロトコル。",
+        detail: "複数機器の時刻がズレていると、障害発生時の Syslog 相関調査が不可能になるため全機器で統一します。",
+        layer: "L7 (UDP 123)",
+      },
+      {
+        term: "Syslog / SNMPv3",
+        shortDef: "イベントログ転送 (UDP 514) と MIB ベース監視・トラップ通知 (UDP 161/162)。",
+        detail: "Syslog には緊急度 0 (Emergencies)〜7 (Debugging) があり、SNMPv3 では認証＋暗号化 (authPriv) によりセキュアな状態監視が可能です。",
+        layer: "L7 (Monitoring)",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "システム運用・障害調査の「目・耳・腕時計」を揃える",
+      analogyText:
+        "ネットワークは構築して終わりではありません。遠隔から安全に操作する『鍵（SSH）』、誰と繋がっているか見る『目（CDP/LLDP）』、ログの時刻を揃える『腕時計（NTP）』、異変を知らせる『警報機（Syslog/SNMP）』があって初めて実務運用できます。",
+      keyPoints: [
+        {
+          title: "Telnet を塞いで SSHv2 に一本化する",
+          body: "Cisco IOS で SSH を有効化するには ①ホスト名設定 ②`ip domain-name` 設定 ③RSA 鍵生成 (`crypto key generate rsa`) ④`username`/`login local` ⑤`line vty` で `transport input ssh` の5ステップが必要です。",
+        },
+        {
+          title: "Syslog 重要度レベル 0〜7 と NTP の連携",
+          body: "Syslog は数字が **小さいほど深刻**（0=Emergency, 3=Error, 4=Warning, 5=Notification, 6=Informational, 7=Debug）です。NTP で時刻を揃えて中央サーバへ送るのが基本です。",
+        },
+      ],
+      steps: [
+        "全ルータ・スイッチで `hostname` と `ip domain-name` を設定し 2048bit RSA 鍵を生成して SSH を有効化する",
+        "`line vty 0 4` で `transport input ssh` を指定し Telnet の待受を完全に遮断する",
+        "`ntp server`・`logging host`・`snmp-server` を構成し、運用監視基盤からタイムスタンプ付きログとポーリングを受信する",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "Syslog Severity (0=Emergency 〜 7=Debugging) の語呂合わせ・数値と名称、および `logging trap informational`（指定レベル **以下＝0〜6すべて** を送信する仕様）が頻出です。",
+        "CDP のセキュリティリスク（外部ISP向きIFでは `no cdp enable` で情報漏洩を防ぐ）もよく問われます。",
+      ],
+      referenceTable: {
+        headers: ["管理プロトコル", "トランスポート / ポート", "主な確認・設定用途"],
+        rows: [
+          ["SSH v2", "TCP 22", "暗号化 CLI ログイン (`ip ssh version 2`)"],
+          ["NTP", "UDP 123", "Stratum 0(原子時計)〜15(最大ホップ), `show ntp associations`"],
+          ["Syslog", "UDP 514", "Severity 0(最重)〜7(Debug), `service timestamps log datetime`"],
+          ["SNMP v2c/v3", "UDP 161 (Query) / 162 (Trap)", "NMS によるポーリング監視 (authPriv推奨)"],
+          ["CDP / LLDP", "L2 マルチキャスト", "隣接機器ホスト名・対向ポート特定 (`show cdp neighbors detail`)"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Cisco IOS SSHv2 & 時刻同期・ログ基本セット",
+          code: `R1(config)# ip domain-name netforge.local
+R1(config)# crypto key generate rsa modulus 2048
+R1(config)# ip ssh version 2
+R1(config)# username admin privilege 15 secret StrongPass!
+R1(config)# line vty 0 4
+R1(config-line)# login local
+R1(config-line)# transport input ssh
+R1(config)# ntp server 192.168.100.10
+R1(config)# logging host 192.168.100.20
+R1(config)# logging trap informational`,
+          note: "既定ホスト名 (`Router`) のままでは RSA 鍵が生成できないため、必ず事前に `hostname` と `ip domain-name` を設定します。",
+        },
+        {
+          title: "隣接機器・システム監視の確認コマンド",
+          code: `SW1# show cdp neighbors detail
+SW1# show lldp neighbors
+SW1# show ntp status
+SW1# show logging`,
+          note: "対向装置の管理IPアドレスやIOSバージョンまで確認したい場合は `show cdp neighbors detail` が強力です。",
+        },
+      ],
+      pitfalls: [
+        "`crypto key generate rsa` を実行する前に `hostname` と `ip domain-name` が未設定だと鍵生成に失敗します。",
+        "`logging trap warnings` (レベル4) を設定した場合、送信されるのは 0〜4（Emergency〜Warning）であり、数値の大きい 5〜7 は送信されません。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-mgmt-1",
+        question: "Cisco IOS ルータで `logging trap errors`（Severity 3）を設定したとき、Syslog サーバへ送信されるログレベルの組み合わせはどれですか？",
+        choices: [
+          "レベル 3 (Errors) のみ",
+          "レベル 0, 1, 2, 3（最も重大〜Errors）",
+          "レベル 3, 4, 5, 6, 7",
+          "レベル 7 (Debugging) のみ",
+        ],
+        correctIndex: 1,
+        explanation:
+          "Syslog は数値が小さいほど重大度が高く、`logging trap <level>` は指定値 **以下（0 〜 指定レベル）** のすべての重大度を送信します。",
+      },
+      {
+        id: "q-mgmt-2",
+        question: "Cisco 製スイッチと他社製スイッチが直接接続されている環境で、双方のデバイス名や対向ポートを自動検出するために有効化すべきプロトコルはどれですか？",
+        choices: ["CDP", "LLDP", "ARP", "SNMP"],
+        correctIndex: 1,
+        explanation:
+          "CDP は Cisco 独自規格であるため、他社製品との相互接続環境では IEEE 802.1AB 標準の LLDP (`lldp run`) を使用します。",
+      },
+      {
+        id: "q-mgmt-3",
+        question: "SSH 接続を有効化した Cisco IOS の `line vty 0 4` において、暗号化なしの Telnet 接続を拒否して SSH のみ許可するコマンドはどれですか？",
+        choices: [
+          "transport input all",
+          "transport input ssh",
+          "no login local",
+          "ip ssh deny telnet",
+        ],
+        correctIndex: 1,
+        explanation:
+          "`transport input ssh` を設定することで、VTY 回線での着信プロトコルを SSH (TCP 22) のみに限定し Telnet (TCP 23) を禁止できます。",
+      },
+    ],
+  },
+  {
+    id: "stage2/l2-security-wireless",
+    stage: "stage-2",
+    slug: "l2-security-wireless",
+    title: "L2セキュリティと無線LAN（Port Security・DHCP Snooping・WLC/WPA3）",
+    summary: "スイッチポートレベルでの不正PC接続防御（Port Security・DHCP Snooping・DAI）と、法人無線LAN（WLC/CAPWAP・WPA2/WPA3）のアーキテクチャを学びます。",
+    estimatedMinutes: 25,
+    diagramVariant: "l2-security-wireless",
+    glossary: [
+      {
+        term: "Port Security",
+        shortDef: "スイッチの各ポートで接続を許可する MAC アドレス数やアドレス自体を制限する機能。",
+        detail: "違反時の動作として `shutdown` (err-disabled 状態), `restrict` (破棄+警告カウント), `protect` (無言破棄) の3モードがあり、既定は `shutdown` です。",
+        layer: "L2 (Security)",
+      },
+      {
+        term: "DHCP Snooping",
+        shortDef: "偽DHCPサーバ（不正GW誘導）を防ぐため、Switch ポートを Trusted / Untrusted に分ける防御機能。",
+        detail: "アクセスポートを Untrusted（デフォルト）にすることで、端末側からの不正な DHCP Offer/Ack を遮断し、正当なリース記録（Binding Table）を生成します。",
+        layer: "L2 (Security)",
+      },
+      {
+        term: "DAI (Dynamic ARP Inspection)",
+        shortDef: "DHCP Snooping の Binding Table と照合し、ARP スプーフィング攻撃を遮断する機能。",
+        detail: "IPとMACの対応が Binding Table にない不正 ARP パケットを Untrusted ポートで即座にドロップします。",
+        layer: "L2 (Security)",
+      },
+      {
+        term: "CAPWAP & WLC",
+        shortDef: "複数の軽量APを WLC（無線コントローラ）から一括集中管理するためのトンネリング規格。",
+        detail: "管理制御（UDP 5246）とユーザデータ転送（UDP 5247）をカプセル化し、電波出力調整・SSID設定・WPA2/WPA3認証を全APへ自動展開します。",
+        layer: "L2 (Wireless)",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "会議室のLANポートやWi-Fiに「入館証チェック」を付ける",
+      analogyText:
+        "誰でも空いているLANケーブルを挿せば社内ネットワークに入れる環境や、偽ルータ（偽DHCPサーバ）を置かれたら通信を盗み見られる環境は危険です。スイッチ自身が『登録済みのPCか』『本物のDHCP・ARPか』を検証するのが L2 セキュリティです。",
+      keyPoints: [
+        {
+          title: "3点セットで守る L2 セキュリティ",
+          body: "① **Port Security** で無断のHUBやPC増設を止め、② **DHCP Snooping** で偽DHCPサーバを防ぎ、③ **DAI** で同一LAN内のARPなりすまし（中間者攻撃）をブロックします。",
+        },
+        {
+          title: "法人無線LANは「軽量AP＋WLC集中管理」が基本",
+          body: "家庭用Wi-Fiルータを何十台も個別に設定変更するのは破綻します。オフィスでは **WLC** に全APを CAPWAP トンネルで収容し、セキュリティも企業認証 **WPA2/WPA3-Enterprise (802.1X)** を用います。",
+        },
+      ],
+      steps: [
+        "端末を繋ぐ Access ポートへ `switchport port-security` を設定し最大 MAC 数を制限する",
+        "`ip dhcp snooping` を有効化し、正規 DHCP サーバ繋がるアップリンクのみ `ip dhcp snooping trust` とする",
+        "`ip arp inspection vlan <id>` (DAI) を有効化して不正 ARP 応答を自動ドロップする",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "Port Security 違反時の3アクション（`protect` / `restrict` / `shutdown`）における SNMP/Syslog 通知有無・ポート状態の差は CCNA 最頻出表です。",
+        "DHCP Snooping においてデフォルト全ポートが Untrusted であり、正規 DHCP サーバ方向とスイッチ間トランクだけ `trust` を付ける点を必ず押さえてください。",
+      ],
+      referenceTable: {
+        headers: ["違反モード / 機能", "パケット処理", "エラーログ / SNMP", "ポート状態"],
+        rows: [
+          ["Port-Security: shutdown (既定)", "破棄", "カウント＋Syslog/Trap送信", "err-disabled (停止)"],
+          ["Port-Security: restrict", "破棄", "カウント＋Syslog/Trap送信", "up のまま維持"],
+          ["Port-Security: protect", "破棄", "ログ・カウント無し", "up のまま維持"],
+          ["WPA2 vs WPA3 (Personal)", "暗号化規格", "WPA2: AES-CCMP (PSK) / WPA3: SAE + GCMP", "SAE で辞書攻撃耐性強化"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Port Security + DHCP Snooping + DAI 設定例",
+          code: `SW1(config)# interface Fa0/1
+SW1(config-if)# switchport mode access
+SW1(config-if)# switchport port-security
+SW1(config-if)# switchport port-security maximum 2
+SW1(config-if)# switchport port-security mac-address sticky
+SW1(config)# ip dhcp snooping
+SW1(config)# ip dhcp snooping vlan 10
+SW1(config)# interface Gig0/1
+SW1(config-if)# ip dhcp snooping trust
+SW1(config)# ip arp inspection vlan 10`,
+          note: "アップリンク側 (`Gig0/1`) に `trust` を入れ忘れると、正規の DHCP サーバからの IP 配布まで遮断されてしまうので注意が必要です。",
+        },
+      ],
+      pitfalls: [
+        "DHCP Snooping を有効にした後、上位ルータ（DHCP サーバ）側のポートへ `ip dhcp snooping trust` を設定し忘れる障害が現場で非常に多く発生します。",
+        "`shutdown` 違反モードで `err-disabled` になったポートを復旧するには、原因を取り除いた後 `shutdown` → `no shutdown`（または `errdisable recovery`）が必要です。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-l2sec-1",
+        question: "Port Security の違反アクションにおいて、不正MACフレームを破棄し、違反カウンターを増加させてSyslog通知も行うが、ポート自体は err-disabled（ダウン）にしないモードはどれですか？",
+        choices: ["protect", "restrict", "shutdown", "disable"],
+        correctIndex: 1,
+        explanation:
+          "`restrict` は通信を遮断しつつログ通知とカウンター記録を行いポートは稼働維持します。`protect` はログ通知なし、`shutdown` は err-disabled に落とします。",
+      },
+      {
+        id: "q-l2sec-2",
+        question: "Cisco スイッチで DHCP Snooping を有効化した直後、すべてのクライアントが IP アドレスを取得できなくなりました。最初に疑うべき設定漏れはどれですか？",
+        choices: [
+          "クライアント側アクセスポートに trust 設定が抜けている",
+          "DHCP サーバが接続されたアップリンクポートに `ip dhcp snooping trust` が抜けている",
+          "VLAN 1 の STP プライオリティが 32768 のままである",
+          "Port Security の maximum が 1 である",
+        ],
+        correctIndex: 1,
+        explanation:
+          "DHCP Snooping 有効化時は既定で全ポートが Untrusted になるため、正規の DHCP サーバが居る側のポートに `trust` を付けないと Offer/Ack が破棄されます。",
+      },
+      {
+        id: "q-l2sec-3",
+        question: "集中型無線LAN構成において、軽量AP (Lightweight AP) と WLC の間で制御トラフィックおよびデータトラフィックをトンネル伝送するプロトコルはどれですか？",
+        choices: ["CAPWAP (UDP 5246/5247)", "HSRP (UDP 1985)", "802.1Q Trunk", "RADIUS (UDP 1812)"],
+        correctIndex: 0,
+        explanation:
+          "CAPWAP は WLC と軽量 AP 間で制御チャネル (UDP 5246) とデータチャネル (UDP 5247) を確立する標準プロトコルです。",
+      },
+    ],
+  },
 ];

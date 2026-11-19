@@ -6,16 +6,20 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  Cloud,
   Cpu,
   ShieldAlert,
   Sparkles,
+  Target,
   Terminal,
   Wrench,
 } from "lucide-react";
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
+import { SkillRadarSection } from "@/components/dashboard/SkillRadarSection";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import {
+  CLOUD_SCENARIOS_META,
   getLessonsByStage,
   getScenariosByStage,
   LESSONS_META,
@@ -77,7 +81,7 @@ export function DashboardClient() {
   const drillStats = useLearningStore((state) => state.drillStats);
 
   const totalLessons = LESSONS_META.length;
-  const totalScenarios = SCENARIOS_META.length;
+  const totalScenarios = SCENARIOS_META.length + CLOUD_SCENARIOS_META.length;
   const totalItems = totalLessons + totalScenarios;
 
   const completedLessonsCount = completedLessonIds.length;
@@ -137,6 +141,13 @@ export function DashboardClient() {
               >
                 <Terminal className="h-4 w-4 text-cyan-400" />
                 <span>CLIラボを試す</span>
+              </Link>
+              <Link
+                href="/exam"
+                className="inline-flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-200 transition-colors hover:border-violet-400 hover:bg-violet-500/20"
+              >
+                <Target className="h-4 w-4 text-violet-300" />
+                <span>総合実力診断</span>
               </Link>
             </div>
           </div>
@@ -372,7 +383,9 @@ export function DashboardClient() {
               <div className="h-8 w-24 animate-pulse rounded bg-slate-800" />
             )}
           </div>
-          <p className="mt-2 text-xs text-slate-500">Stage 1〜3 全16レッスン</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Stage 1〜3 全{totalLessons}レッスン
+          </p>
         </Card>
 
         <Card className="p-5">
@@ -418,10 +431,13 @@ export function DashboardClient() {
             )}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            サブネット / パケット / Diff演習
+            サブネット / IPv6 / パケット / Diff演習
           </p>
         </Card>
       </section>
+
+      {/* Skill Radar & Diagnostic */}
+      <SkillRadarSection />
 
       {/* Stage 1-3 Roadmap */}
       <section className="space-y-4">
@@ -540,7 +556,7 @@ export function DashboardClient() {
           ワークスペース・クイックアクセス
         </h2>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Link href="/learn" className="group block">
             <Card interactive className="h-full p-5">
               <div className="mb-3 flex items-center justify-between">
@@ -587,7 +603,26 @@ export function DashboardClient() {
                 障害対応シミュレータ
               </h3>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-                VLAN・DNS・ルーティング障害を実務チケット形式で調査し復旧。
+                VLAN・DNS・ルーティング・Linux障害を実務チケット形式で復旧。
+              </p>
+            </Card>
+          </Link>
+
+          <Link href="/labs/cloud" className="group block">
+            <Card interactive className="h-full p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300">
+                  <Cloud className="h-4 w-4" />
+                </div>
+                <Badge variant="cyan">
+                  {CLOUD_SCENARIOS_META.length} VPCラボ
+                </Badge>
+              </div>
+              <h3 className="text-sm font-bold text-slate-100 group-hover:text-sky-200">
+                クラウドVPCラボ
+              </h3>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                AWS VPCのRoute Table・SG(Stateful) vs NACL(Stateless)を実践。
               </p>
             </Card>
           </Link>

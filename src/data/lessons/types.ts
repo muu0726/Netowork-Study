@@ -16,7 +16,11 @@ export type DiagramVariant =
   | "troubleshooting-layers"
   | "packet-analysis"
   | "cloud-vpc-vpn"
-  | "netops-automation";
+  | "netops-automation"
+  | "ipv6-fundamentals"
+  | "network-management"
+  | "l2-security-wireless"
+  | "web-modern-network";
 
 export interface GlossaryTerm {
   term: string;

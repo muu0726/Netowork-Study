@@ -31,3 +31,30 @@
 - [x] Wireshark風3ペイン・パケット解析ドリル
 - [x] 構成図レビュー＆コンフィグDiff演習
 - [x] リロード後 Hydration エラーなし永続化確認 & 最終ビルド検証
+
+## Phase 5: ACL・NAT/NAPT・DHCP のエンジン拡張と実践シナリオ
+- [x] L4 TCP/UDP パケット追跡 & ホストコマンド (`curl`, `nc -zv`) 実装
+- [x] 標準/拡張/名前付き ACL・32bit ワイルドカードビット演算・暗黙の deny・ヒットカウンター・`show access-lists` 実装
+- [x] NAT / NAPT (overload) 変換・逆NAT・ホップ変換履歴 (`natTranslation`)・トポロジ視覚化
+- [x] DHCP サーバプール・除外設定・バインディング・`ipconfig /renew` 実装
+- [x] 追加シナリオ 3本 (`cli-nat-acl-web`, `ts-acl-web-blocked`, `ts-dhcp-failure`) & Vitest 単体テスト実装
+- [x] `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, `npm run build` 通過確認
+
+## Phase 6: OSPF・STP・HSRP（動的ルーティング＆冗長化）
+- [x] シングルエリア OSPF (ダイクストラ最短経路・ネイバー・`show ip ospf neighbor`)
+- [x] STP (ブリッジID比較・ルートブリッジ選出・ブロッキングポート可視化)
+- [x] HSRP (仮想IP/Active/Standby・優先度プリエンプト・フェイルオーバー)
+- [x] 冗長化ラボ＆障害チケット 4本 (`cli-ospf-cost`, `cli-stp-root-bridge`, `ts-ospf-neighbor-down`, `ts-hsrp-failover-broken`) & 単体テスト追加
+- [x] `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, `npm run build` 通過確認
+
+## Phase 7: 実務OS（Linux）・Webインフラ・クラウドVPC統合ラボ
+- [x] Linux Host モード (`ip addr`, `ip route`, `ss -tulpn`, `dig`, `systemctl`, `curl -v`) & 障害チケット (`ts-linux-nginx-down`)
+- [x] L7 Web・TLSハンドシェイク段階出力 & デーモン状態管理
+- [x] クラウドVPC (IGW/NAT GW/Security Group/NACL/Route Table) 純粋エンジン & `/labs/cloud` ラボ (3シナリオ)
+- [x] `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, `npm run build` 通過確認
+
+## Phase 8: IPv6・管理プロトコル・セキュリティ完全網羅 & 総合実力診断
+- [x] IPv6 純粋演算モジュール (`ipv6-math.ts`) & `/tools` インタラクティブ圧縮/展開・識別クイズツール (`Ipv6Tool.tsx`)
+- [x] Stage 2〜3 カリキュラム完全拡充（IPv6基礎 / 管理監視 SSH・CDP・NTP・Syslog・SNMP / L2セキュリティ・無線LAN / Web・TLS 1.3・LB・BGP・コンテナ網 全20レッスン）
+- [x] 総合実力診断エンジン (`diagnostic-engine.ts`)・6分野レーダーチャート (`SkillRadarSection.tsx`)・模擬試験 & ランダム障害対応 (`/exam`)
+- [x] 全テスト・型チェック・ESLint・Next.js 本番ビルド最終確認 (`npx vitest run`, `npx tsc --noEmit`, `npm run lint`, `npm run build`)

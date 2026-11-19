@@ -1,5 +1,17 @@
 import { normalizeInterfaceName } from "./cli-engine";
-import { simulateNslookup, simulatePing } from "./packet-simulator";
+import { isIpInSubnet } from "./ip-math";
+import {
+  simulateNslookup,
+  simulatePing,
+  simulateTcpConnect,
+} from "./packet-simulator";
+import {
+  computeHsrpTable,
+  computeOspfNeighbors,
+  computeOspfRoutes,
+  computeStpForVlan,
+  syncHsrpRoles,
+} from "./routing-redundancy";
 import type {
   GoalEvaluationResult,
   NetworkState,
@@ -260,6 +272,313 @@ function evaluateSingleGoal(
         detail: passed
           ? `${device.hostname} のDNS設定が ${goal.expectedDnsIp} に更新されました`
           : `${device.hostname} のDNS設定が ${device.dnsServer ?? "未設定"} です（期待: ${goal.expectedDnsIp}）`,
+      };
+    }
+
+    case "tcp_connect": {
+      const sim = simulateTcpConnect(
+        state,
+        goal.sourceDeviceId,
+        goal.target,
+        goal.port,
+        "nc",
+      );
+      const expectSuccess = goal.expectSuccess ?? true;
+      const passed = sim.trace.success === expectSuccess;
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? expectSuccess
+            ? `TCP/${goal.port} への接続に成功しました`
+            : `TCP/${goal.port} は期待通り遮断/拒否されました (${sim.trace.failureReason ?? "Blocked"})`
+          : expectSuccess
+            ? `TCP/${goal.port} 接続失敗: ${sim.trace.failureReason ?? sim.output}`
+            : `TCP/${goal.port} がまだ到達可能です（遮断される必要があります）`,
+      };
+    }
+
+    case "nat_translation": {
+      const sim =
+        goal.port !== undefined
+          ? simulateTcpConnect(
+              state,
+              goal.sourceDeviceId,
+              goal.target,
+              goal.port,
+              "nc",
+            )
+          : simulatePing(state, goal.sourceDeviceId, goal.target);
+      const natHop = sim.trace.hops.find(
+        (h) =>
+          h.deviceId === goal.natRouterId &&
+          h.natTranslation?.direction === "inside-to-outside" &&
+          h.natTranslation.afterIp === goal.expectedGlobalIp,
+      );
+      const passed = sim.trace.success && Boolean(natHop);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed && natHop?.natTranslation
+          ? `${natHop.hostname} で NAPT 変換済み (${natHop.natTranslation.beforeIp} → ${natHop.natTranslation.afterIp})`
+          : !sim.trace.success
+            ? `通信が失敗しました (${sim.trace.failureReason ?? "Unreachable"})`
+            : `${goal.natRouterId} で ${goal.expectedGlobalIp} への NAT 変換が確認できません`,
+      };
+    }
+
+    case "dhcp_lease": {
+      const device = state.devices[goal.clientDeviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.clientDeviceId}" が見つかりません`,
+        };
+      }
+      const primaryIface = Object.values(device.interfaces).find(
+        (i) => i.name !== "Loopback0",
+      );
+      const ip = primaryIface?.ip;
+      const mask = primaryIface?.subnetMask;
+      let inSubnet = false;
+      if (ip && mask === goal.expectedMask) {
+        try {
+          inSubnet = isIpInSubnet(ip, goal.expectedNetwork, goal.expectedMask);
+        } catch {
+          inSubnet = false;
+        }
+      }
+      const gwOk =
+        !goal.expectedGateway || device.defaultGateway === goal.expectedGateway;
+      const dnsOk = !goal.expectedDns || device.dnsServer === goal.expectedDns;
+      const passed = Boolean(ip && inSubnet && gwOk && dnsOk);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${device.hostname} が IP ${ip} / ${mask} を自動取得済みです`
+          : !ip
+            ? `${device.hostname} にまだ IP が割り当てられていません (ipconfig /renew)`
+            : !inSubnet
+              ? `${device.hostname} の IP ${ip} (${mask ?? "-"}) が期待ネットワーク ${goal.expectedNetwork} (${goal.expectedMask}) と一致しません`
+              : !gwOk
+                ? `GW が ${device.defaultGateway ?? "未設定"} です（期待: ${goal.expectedGateway}）`
+                : `DNS が ${device.dnsServer ?? "未設定"} です（期待: ${goal.expectedDns}）`,
+      };
+    }
+
+    case "acl_applied": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const resolvedIfName =
+        normalizeInterfaceName(goal.interfaceName, device.interfaces) ??
+        goal.interfaceName;
+      const iface =
+        device.interfaces[resolvedIfName] ??
+        Object.values(device.interfaces).find(
+          (i) => i.name.toLowerCase() === goal.interfaceName.toLowerCase(),
+        );
+      if (!iface) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `${device.hostname} に ${goal.interfaceName} が見つかりません`,
+        };
+      }
+      const appliedAcl =
+        goal.direction === "in" ? iface.inboundAcl : iface.outboundAcl;
+      const aclExists = Boolean(appliedAcl && device.acls?.[appliedAcl]);
+      const nameMatches = !goal.aclName || appliedAcl === goal.aclName;
+      const passed = Boolean(appliedAcl && aclExists && nameMatches);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${device.hostname} ${iface.name} (${goal.direction}) に ACL ${appliedAcl} が適用されています`
+          : `${device.hostname} ${iface.name} (${goal.direction}) の ACL 適用を確認してください（現在: ${appliedAcl ?? "未適用"}）`,
+      };
+    }
+
+    case "ospf_neighbor": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const neighbors = computeOspfNeighbors(state, goal.deviceId);
+      const minNeighbors = goal.minNeighbors ?? 1;
+      const matchesDev =
+        !goal.expectedNeighborDeviceId ||
+        neighbors.some(
+          (n) => n.neighborDeviceId === goal.expectedNeighborDeviceId,
+        );
+      const matchesRid =
+        !goal.expectedNeighborRouterId ||
+        neighbors.some(
+          (n) => n.neighborRouterId === goal.expectedNeighborRouterId,
+        );
+      const passed =
+        neighbors.length >= minNeighbors && matchesDev && matchesRid;
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${device.hostname} が OSPF ネイバー (${neighbors.map((n) => n.neighborRouterId).join(", ")}) を確立しています`
+          : `${device.hostname} の OSPF ネイバー要件を満たしていません（現在のネイバー数: ${neighbors.length}）`,
+      };
+    }
+
+    case "ospf_route": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const routes = computeOspfRoutes(state, goal.deviceId);
+      const hit = routes.find((r) => {
+        if (r.destination !== goal.destination || r.mask !== goal.mask) {
+          return false;
+        }
+        if (goal.expectedNextHop && r.nextHop !== goal.expectedNextHop) {
+          return false;
+        }
+        if (goal.expectedInterface && r.interfaceName !== goal.expectedInterface) {
+          return false;
+        }
+        return true;
+      });
+      const passed = Boolean(hit);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed && hit
+          ? `${device.hostname} が O ロート ${hit.destination}/${hit.prefixLength} via ${hit.nextHop} (${hit.interfaceName}, cost=${hit.metric}) を学習済みです`
+          : `${device.hostname} に期待される OSPF ルート (${goal.destination}/${goal.mask}${goal.expectedNextHop ? ` via ${goal.expectedNextHop}` : ""}) がありません`,
+      };
+    }
+
+    case "stp_root": {
+      const stpMap = computeStpForVlan(state, goal.vlanId);
+      const expectedSw = state.devices[goal.expectedRootDeviceId];
+      const swState = stpMap[goal.expectedRootDeviceId];
+      const passed = Boolean(swState && swState.isRoot);
+      const actualRoot = Object.values(stpMap).find((s) => s.isRoot);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `VLAN ${goal.vlanId} の Root Bridge は ${expectedSw?.hostname ?? goal.expectedRootDeviceId} (Priority ${swState?.bridgePriority}) です`
+          : `VLAN ${goal.vlanId} の現在の Root Bridge は ${actualRoot?.hostname ?? "不明"} (Priority ${actualRoot?.bridgePriority ?? "-"}) です`,
+      };
+    }
+
+    case "hsrp_state": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const resolvedIf =
+        normalizeInterfaceName(goal.interfaceName, device.interfaces) ??
+        goal.interfaceName;
+      const table = computeHsrpTable(state);
+      const entry = table.find(
+        (e) =>
+          e.deviceId === goal.deviceId &&
+          e.interfaceName.toLowerCase() === resolvedIf.toLowerCase() &&
+          e.group === goal.group,
+      );
+      const stateOk = entry?.state === goal.expectedState;
+      const vipOk =
+        !goal.expectedVirtualIp || entry?.virtualIp === goal.expectedVirtualIp;
+      const preemptOk =
+        goal.expectedPreempt === undefined ||
+        entry?.preempt === goal.expectedPreempt;
+      const passed = Boolean(entry && stateOk && vipOk && preemptOk);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed && entry
+          ? `${device.hostname} ${entry.interfaceName} Grp ${entry.group} は ${entry.state} (VIP ${entry.virtualIp}, Preempt=${entry.preempt ? "ON" : "OFF"}) です`
+          : `${device.hostname} ${resolvedIf} Grp ${goal.group}: 状態=${entry?.state ?? "未設定"}, VIP=${entry?.virtualIp ?? "-"}, Preempt=${entry?.preempt ? "ON" : "OFF"}`,
+      };
+    }
+
+    case "hsrp_failover": {
+      const activeDev = state.devices[goal.activeDeviceId];
+      if (!activeDev) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.activeDeviceId}" が見つかりません`,
+        };
+      }
+      const resolvedActiveIf =
+        normalizeInterfaceName(goal.activeInterfaceName, activeDev.interfaces) ??
+        goal.activeInterfaceName;
+      const cloned: NetworkState = structuredClone(state);
+      const targetIface = cloned.devices[goal.activeDeviceId]?.interfaces[resolvedActiveIf];
+      if (!targetIface) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `${activeDev.hostname} に ${goal.activeInterfaceName} が見つかりません`,
+        };
+      }
+      targetIface.adminUp = false;
+      const failedState = syncHsrpRoles(cloned);
+      const failoverTable = computeHsrpTable(failedState);
+      const standbyPromoted = failoverTable.some(
+        (e) =>
+          e.deviceId === goal.expectedStandbyDeviceId && e.state === "Active",
+      );
+      const pingAfter = simulatePing(
+        failedState,
+        goal.testSourceDeviceId,
+        goal.testTarget,
+      );
+      const passed = standbyPromoted && pingAfter.trace.success;
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${activeDev.hostname} ${resolvedActiveIf} 障害時に ${goal.expectedStandbyDeviceId} へ Active が切り替わり通信が継続します`
+          : !standbyPromoted
+            ? `${activeDev.hostname} 障害時に ${goal.expectedStandbyDeviceId} が Active へ昇格しませんでした`
+            : `フェイルオーバー後の疎通テストに失敗しました (${pingAfter.trace.failureReason ?? "Unreachable"})`,
       };
     }
   }

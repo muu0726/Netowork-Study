@@ -435,6 +435,120 @@ function renderDiagramContent(variant: DiagramVariant) {
           ))}
         </g>
       );
+
+    case "ipv6-fundamentals":
+      return (
+        <g>
+          <text x={320} y={28} textAnchor="middle" fill="#cbd5e1" fontSize={12} fontFamily="monospace" fontWeight={700}>
+            IPv6 128bit アドレス構造 &amp; 種別プレフィックス
+          </text>
+          <rect x={40} y={48} width={220} height={46} rx={8} fill="#082f49" stroke="#22d3ee" strokeWidth={1.5} />
+          <text x={150} y={68} textAnchor="middle" fill="#67e8f9" fontSize={11} fontFamily="monospace" fontWeight={700}>Global Routing Prefix</text>
+          <text x={150} y={85} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">48bit (2001:0db8:0000)</text>
+
+          <rect x={268} y={48} width={110} height={46} rx={8} fill="#2e1a47" stroke="#a78bfa" strokeWidth={1.5} />
+          <text x={323} y={68} textAnchor="middle" fill="#ddd6fe" fontSize={11} fontFamily="monospace" fontWeight={700}>Subnet ID</text>
+          <text x={323} y={85} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">16bit</text>
+
+          <rect x={386} y={48} width={214} height={46} rx={8} fill="#064e3b" stroke="#10b981" strokeWidth={1.5} />
+          <text x={493} y={68} textAnchor="middle" fill="#6ee7b7" fontSize={11} fontFamily="monospace" fontWeight={700}>Interface ID (SLAAC/EUI-64)</text>
+          <text x={493} y={85} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">64bit (/64 標準)</text>
+
+          {[
+            { x: 40, label: "2000::/3", title: "GUA (インターネット)", color: "#22d3ee" },
+            { x: 230, label: "FE80::/10", title: "Link-Local (NDP/同一LAN)", color: "#f59e0b" },
+            { x: 420, label: "FC00::/7", title: "ULA (閉域Private)", color: "#a78bfa" },
+          ].map((box) => (
+            <g key={box.label}>
+              <rect x={box.x} y={120} width={180} height={82} rx={9} fill="#0d1322" stroke={box.color} strokeWidth={1.5} />
+              <text x={box.x + 90} y={150} textAnchor="middle" fill={box.color} fontSize={13} fontFamily="monospace" fontWeight={700}>
+                {box.label}
+              </text>
+              <text x={box.x + 90} y={175} textAnchor="middle" fill="#cbd5e1" fontSize={10.5}>
+                {box.title}
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+
+    case "network-management":
+      return (
+        <g>
+          <rect x={44} y={46} width={150} height={144} rx={10} fill="#0d1322" stroke="#22d3ee" strokeWidth={1.6} />
+          <text x={119} y={76} textAnchor="middle" fill="#67e8f9" fontSize={12} fontFamily="monospace" fontWeight={700}>IOS Router / SW</text>
+          <text x={119} y={104} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">transport input ssh</text>
+          <text x={119} y={126} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">cdp run / lldp run</text>
+          <text x={119} y={148} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">ntp server</text>
+          <text x={119} y={170} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">logging / snmpv3</text>
+
+          {[
+            { y: 46, title: "SSH (TCP 22)", desc: "暗号化リモート管理", color: "#10b981" },
+            { y: 98, title: "NTP (UDP 123)", desc: "ログ調査用の時刻同期", color: "#f59e0b" },
+            { y: 150, title: "Syslog / SNMPv3", desc: "Severity 0-7 / OID監視", color: "#a78bfa" },
+          ].map((item) => (
+            <g key={item.title}>
+              <line x1={194} y1={item.y + 22} x2={340} y2={item.y + 22} stroke={item.color} strokeWidth={2} strokeDasharray="5 3" />
+              <rect x={340} y={item.y} width={256} height={44} rx={8} fill="#0d1322" stroke={item.color} strokeWidth={1.5} />
+              <text x={468} y={item.y + 19} textAnchor="middle" fill={item.color} fontSize={11} fontFamily="monospace" fontWeight={700}>
+                {item.title}
+              </text>
+              <text x={468} y={item.y + 35} textAnchor="middle" fill="#94a3b8" fontSize={10}>
+                {item.desc}
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+
+    case "l2-security-wireless":
+      return (
+        <g>
+          <rect x={36} y={40} width={274} height={160} rx={10} fill="#0d1322" stroke="#f59e0b" strokeWidth={1.6} />
+          <text x={173} y={66} textAnchor="middle" fill="#fcd34d" fontSize={12} fontFamily="monospace" fontWeight={700}>L2 Defense (Switch)</text>
+          <rect x={54} y={82} width={238} height={32} rx={6} fill="#060a14" stroke="#22d3ee" />
+          <text x={173} y={102} textAnchor="middle" fill="#67e8f9" fontSize={10.5} fontFamily="monospace">Port Security (MAC上限制限)</text>
+          <rect x={54} y={120} width={238} height={32} rx={6} fill="#060a14" stroke="#10b981" />
+          <text x={173} y={140} textAnchor="middle" fill="#6ee7b7" fontSize={10.5} fontFamily="monospace">DHCP Snooping (Trust/Untrust)</text>
+          <rect x={54} y={158} width={238} height={32} rx={6} fill="#060a14" stroke="#f43f5e" />
+          <text x={173} y={178} textAnchor="middle" fill="#fda4af" fontSize={10.5} fontFamily="monospace">DAI (不正ARP防御)</text>
+
+          <rect x={334} y={40} width={270} height={160} rx={10} fill="#0d1322" stroke="#a78bfa" strokeWidth={1.6} />
+          <text x={469} y={66} textAnchor="middle" fill="#c4b5fd" fontSize={12} fontFamily="monospace" fontWeight={700}>Wireless &amp; CAPWAP</text>
+          <rect x={354} y={86} width={104} height={46} rx={7} fill="#060a14" stroke="#38bdf8" />
+          <text x={406} y={114} textAnchor="middle" fill="#7dd3fc" fontSize={11} fontFamily="monospace">AP (LWAP)</text>
+          <rect x={486} y={86} width={98} height={46} rx={7} fill="#060a14" stroke="#a78bfa" />
+          <text x={535} y={114} textAnchor="middle" fill="#ddd6fe" fontSize={11} fontFamily="monospace">WLC</text>
+          <line x1={458} y1={109} x2={486} y2={109} stroke="#22d3ee" strokeWidth={2} />
+          <text x={469} y={156} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">Control (UDP 5246) / Data (5247)</text>
+          <text x={469} y={178} textAnchor="middle" fill="#6ee7b7" fontSize={10} fontFamily="monospace">WPA2-AES / WPA3-SAE</text>
+        </g>
+      );
+
+    case "web-modern-network":
+      return (
+        <g>
+          {[
+            { x: 32, title: "Client", sub: "TLS 1.3 (1-RTT)", color: "#38bdf8" },
+            { x: 186, title: "L7 ALB / WAF", sub: "HTTPS終端・分散", color: "#22d3ee" },
+            { x: 344, title: "App / Container", sub: "Bridge / Overlay", color: "#a78bfa" },
+            { x: 500, title: "AS / BGP Edge", sub: "AS Path / eBGP", color: "#10b981" },
+          ].map((node, i) => (
+            <g key={node.title}>
+              <rect x={node.x} y={68} width={118} height={92} rx={9} fill="#0d1322" stroke={node.color} strokeWidth={1.6} />
+              <text x={node.x + 59} y={108} textAnchor="middle" fill={node.color} fontSize={11} fontFamily="monospace" fontWeight={700}>
+                {node.title}
+              </text>
+              <text x={node.x + 59} y={132} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>
+                {node.sub}
+              </text>
+              {i < 3 && (
+                <line x1={node.x + 118} y1={114} x2={node.x + 154} y2={114} stroke="#64748b" strokeWidth={2} />
+              )}
+            </g>
+          ))}
+        </g>
+      );
   }
 }
 

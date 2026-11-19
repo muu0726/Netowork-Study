@@ -22,8 +22,14 @@ function getRouteMeta(pathname: string): RouteTitleMeta {
   if (pathname.startsWith("/labs/troubleshoot")) {
     return { section: "Incident Lab", title: "リアル障害対応シミュレータ" };
   }
+  if (pathname.startsWith("/labs/cloud")) {
+    return { section: "Cloud VPC Lab", title: "AWS VPC / SG・NACL 実践ラボ" };
+  }
   if (pathname.startsWith("/tools")) {
     return { section: "Practice Tools", title: "実践ミニツール＆ドリル" };
+  }
+  if (pathname.startsWith("/exam")) {
+    return { section: "Assessment", title: "総合実力診断・模擬試験" };
   }
   return { section: "NetForge", title: "ワークスペース" };
 }

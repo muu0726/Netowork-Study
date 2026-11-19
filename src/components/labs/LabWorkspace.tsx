@@ -57,14 +57,27 @@ function classifyOutputKind(output: string): TerminalLine["kind"] {
     output.includes("0 percent (0/5)") ||
     output.includes("Non-existent domain") ||
     output.includes("DNS Server Unreachable") ||
-    output.includes("timed out")
+    output.includes("timed out") ||
+    output.includes("Blocked by ACL") ||
+    output.includes("Connection refused") ||
+    output.includes("DHCP failed") ||
+    output.includes("An error occurred") ||
+    output.includes("inactive (dead)") ||
+    output.includes("NXDOMAIN") ||
+    output.includes("connection timed out")
   ) {
     return "error";
   }
   if (
     output.includes("Success rate is 100 percent") ||
     output.includes("0% loss") ||
-    output.includes("Trace complete.")
+    output.includes("Trace complete.") ||
+    output.includes("HTTP/1.1 200 OK") ||
+    output.includes("succeeded!") ||
+    output.includes("DHCP Lease acquired") ||
+    output.includes("active (running)") ||
+    output.includes("status: NOERROR") ||
+    output.includes("Started ")
   ) {
     return "success";
   }

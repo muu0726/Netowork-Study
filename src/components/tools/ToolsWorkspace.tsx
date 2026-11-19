@@ -1,8 +1,9 @@
 "use client";
 
-import { Binary, FileSearch, GitCompare, Wrench } from "lucide-react";
+import { Binary, FileSearch, GitCompare, Globe, Wrench } from "lucide-react";
 import { useState } from "react";
 import { ConfigReviewDrill } from "@/components/tools/ConfigReviewDrill";
+import { Ipv6Tool } from "@/components/tools/Ipv6Tool";
 import { SubnetTool } from "@/components/tools/SubnetTool";
 import { WiresharkDrill } from "@/components/tools/WiresharkDrill";
 import { Badge } from "@/components/ui/Badge";
@@ -12,10 +13,11 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { cn } from "@/lib/cn";
 import { useLearningStore } from "@/store/useLearningStore";
 
-type ActiveToolId = "subnet" | "wireshark" | "config-review";
+type ActiveToolId = "subnet" | "ipv6" | "wireshark" | "config-review";
 
 const TOOL_ICONS: Record<ActiveToolId, typeof Binary> = {
   subnet: Binary,
+  ipv6: Globe,
   wireshark: FileSearch,
   "config-review": GitCompare,
 };
@@ -71,7 +73,7 @@ export function ToolsWorkspace() {
       </div>
 
       {/* Tool Selector Cards */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TOOLS_META.map((tool) => {
           const Icon = TOOL_ICONS[tool.id];
           const isActive = tool.id === activeTool;
@@ -120,6 +122,7 @@ export function ToolsWorkspace() {
 
       {/* Active Tool Body */}
       {activeTool === "subnet" && <SubnetTool />}
+      {activeTool === "ipv6" && <Ipv6Tool />}
       {activeTool === "wireshark" && <WiresharkDrill />}
       {activeTool === "config-review" && <ConfigReviewDrill />}
     </div>

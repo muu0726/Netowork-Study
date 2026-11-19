@@ -1,13 +1,32 @@
 import {
+  allocateDhcpLease,
+  applyInsideToOutsideNat,
+  applyOutsideToInsideNat,
+  evaluateAcl,
+} from "./acl-nat-dhcp";
+import {
   calculateSubnet,
   isSameSubnet,
   isValidIpv4,
   longestPrefixMatch,
 } from "./ip-math";
+import {
+  findConnectedLink,
+  getPhysicalInterfaceName,
+  isInterfaceOperationalUp,
+  isLoopbackInterfaceName,
+  isPhysicalInterfaceUp,
+  type ConnectedLinkInfo,
+} from "./link-utils";
+import {
+  computeOspfRoutes,
+  computeStpBlockingPortSet,
+  findActiveHsrpForInterface,
+} from "./routing-redundancy";
 import type {
+  NatHopInfo,
   NetworkDevice,
   NetworkInterface,
-  NetworkLink,
   NetworkState,
   PacketDirection,
   PacketFailureReason,
@@ -16,6 +35,15 @@ import type {
   SimulationOutput,
 } from "./types";
 
+export {
+  findConnectedLink,
+  getPhysicalInterfaceName,
+  isInterfaceOperationalUp,
+  isLoopbackInterfaceName,
+  isPhysicalInterfaceUp,
+  type ConnectedLinkInfo,
+};
+
 export interface EffectiveRouteEntry {
   destination: string;
   mask: string;
@@ -23,107 +51,8 @@ export interface EffectiveRouteEntry {
   nextHop?: string;
   interfaceName?: string;
   adminDistance: number;
-  type: "connected" | "static";
-}
-
-export interface ConnectedLinkInfo {
-  link: NetworkLink;
-  peerDeviceId: string;
-  peerInterface: string;
-}
-
-export function isLoopbackInterfaceName(name: string): boolean {
-  return name.toLowerCase().startsWith("lo");
-}
-
-export function getPhysicalInterfaceName(iface: NetworkInterface): string {
-  if (iface.isSubinterface && iface.parentInterface) {
-    return iface.parentInterface;
-  }
-  const dotIdx = iface.name.indexOf(".");
-  if (dotIdx !== -1) {
-    return iface.name.slice(0, dotIdx);
-  }
-  return iface.name;
-}
-
-export function findConnectedLink(
-  state: NetworkState,
-  deviceId: string,
-  interfaceName: string,
-): ConnectedLinkInfo | null {
-  const device = state.devices[deviceId];
-  const iface = device?.interfaces[interfaceName];
-  const physicalName = iface ? getPhysicalInterfaceName(iface) : interfaceName;
-
-  for (const link of state.links) {
-    if (link.fromDeviceId === deviceId && link.fromInterface === physicalName) {
-      return {
-        link,
-        peerDeviceId: link.toDeviceId,
-        peerInterface: link.toInterface,
-      };
-    }
-    if (link.toDeviceId === deviceId && link.toInterface === physicalName) {
-      return {
-        link,
-        peerDeviceId: link.fromDeviceId,
-        peerInterface: link.fromInterface,
-      };
-    }
-  }
-
-  return null;
-}
-
-export function isPhysicalInterfaceUp(
-  state: NetworkState,
-  deviceId: string,
-  physicalInterfaceName: string,
-): boolean {
-  const device = state.devices[deviceId];
-  if (!device) {
-    return false;
-  }
-  const iface = device.interfaces[physicalInterfaceName];
-  if (!iface || !iface.adminUp) {
-    return false;
-  }
-  if (isLoopbackInterfaceName(physicalInterfaceName)) {
-    return true;
-  }
-
-  const connected = findConnectedLink(state, deviceId, physicalInterfaceName);
-  if (!connected || !connected.link.up) {
-    return false;
-  }
-
-  const peerDevice = state.devices[connected.peerDeviceId];
-  const peerIface = peerDevice?.interfaces[connected.peerInterface];
-  return Boolean(peerIface && peerIface.adminUp);
-}
-
-export function isInterfaceOperationalUp(
-  state: NetworkState,
-  deviceId: string,
-  interfaceName: string,
-): boolean {
-  const device = state.devices[deviceId];
-  if (!device) {
-    return false;
-  }
-  const iface = device.interfaces[interfaceName];
-  if (!iface || !iface.adminUp) {
-    return false;
-  }
-  const physicalName = getPhysicalInterfaceName(iface);
-  if (iface.isSubinterface) {
-    if (iface.dot1qVlan === undefined) {
-      return false;
-    }
-    return isPhysicalInterfaceUp(state, deviceId, physicalName);
-  }
-  return isPhysicalInterfaceUp(state, deviceId, physicalName);
+  metric?: number;
+  type: "connected" | "static" | "ospf";
 }
 
 export function getRouterRoutingTable(
@@ -162,6 +91,26 @@ export function getRouterRoutingTable(
       nextHop: staticRoute.nextHop,
       adminDistance: staticRoute.adminDistance,
       type: "static",
+    });
+  }
+
+  const existingKeys = new Set(
+    routes.map((r) => `${r.destination}/${r.prefixLength}`),
+  );
+  for (const ospfRoute of computeOspfRoutes(state, router.id)) {
+    const key = `${ospfRoute.destination}/${ospfRoute.prefixLength}`;
+    if (existingKeys.has(key)) {
+      continue;
+    }
+    routes.push({
+      destination: ospfRoute.destination,
+      mask: ospfRoute.mask,
+      prefixLength: ospfRoute.prefixLength,
+      nextHop: ospfRoute.nextHop,
+      interfaceName: ospfRoute.interfaceName,
+      adminDistance: ospfRoute.adminDistance,
+      metric: ospfRoute.metric,
+      type: "ospf",
     });
   }
 
@@ -269,25 +218,56 @@ interface L2DeliveryFailure {
 
 type L2DeliveryResult = L2DeliverySuccess | L2DeliveryFailure;
 
+interface MatchedL2Receiver {
+  iface: NetworkInterface;
+  arpMac: string;
+}
+
+function matchInterfaceIpOrHsrp(
+  state: NetworkState,
+  device: NetworkDevice,
+  iface: NetworkInterface,
+  targetIp: string,
+): MatchedL2Receiver | null {
+  if (!iface.adminUp) {
+    return null;
+  }
+  if (iface.ip === targetIp) {
+    return { iface, arpMac: iface.mac };
+  }
+  const hsrpMatch = findActiveHsrpForInterface(
+    state,
+    device.id,
+    iface.name,
+    targetIp,
+  );
+  if (hsrpMatch) {
+    return { iface, arpMac: hsrpMatch.virtualMac };
+  }
+  return null;
+}
+
 function findPhysicalInterfaceOnDevice(
+  state: NetworkState,
   device: NetworkDevice,
   physicalPortName: string,
   incomingTag: number | undefined,
   targetIp: string,
-): NetworkInterface | null {
+): MatchedL2Receiver | null {
   const interfaces = Object.values(device.interfaces);
 
   if (incomingTag !== undefined) {
-    const subMatch = interfaces.find(
-      (iface) =>
+    for (const iface of interfaces) {
+      if (
         iface.isSubinterface &&
         getPhysicalInterfaceName(iface) === physicalPortName &&
-        iface.dot1qVlan === incomingTag &&
-        iface.adminUp &&
-        iface.ip === targetIp,
-    );
-    if (subMatch) {
-      return subMatch;
+        iface.dot1qVlan === incomingTag
+      ) {
+        const matched = matchInterfaceIpOrHsrp(state, device, iface, targetIp);
+        if (matched) {
+          return matched;
+        }
+      }
     }
 
     // Native VLAN (VLAN 1) は物理インターフェースが未タグのまま受けることがある
@@ -300,8 +280,8 @@ function findPhysicalInterfaceOnDevice(
       );
       if (!hasVlan1Sub) {
         const phys = device.interfaces[physicalPortName];
-        if (phys && phys.adminUp && phys.ip === targetIp) {
-          return phys;
+        if (phys) {
+          return matchInterfaceIpOrHsrp(state, device, phys, targetIp);
         }
       }
     }
@@ -309,8 +289,8 @@ function findPhysicalInterfaceOnDevice(
   }
 
   const phys = device.interfaces[physicalPortName];
-  if (phys && phys.adminUp && phys.ip === targetIp) {
-    return phys;
+  if (phys) {
+    return matchInterfaceIpOrHsrp(state, device, phys, targetIp);
   }
   return null;
 }
@@ -350,7 +330,10 @@ function findDeviceInPhysicalL2Fabric(
 
     if (dev.type !== "switch") {
       for (const iface of Object.values(dev.interfaces)) {
-        if (iface.ip === targetIp) {
+        const isHsrpVip = Object.values(iface.hsrpGroups ?? {}).some(
+          (g) => g.virtualIp === targetIp,
+        );
+        if (iface.ip === targetIp || isHsrpVip) {
           const physName = getPhysicalInterfaceName(iface);
           const up = isPhysicalInterfaceUp(state, dev.id, physName);
           return {
@@ -486,13 +469,14 @@ function deliverL2Frame(
 
   // スイッチを経由しない直接接続（Router-Router, PC-Server等）
   if (firstPeer.type !== "switch") {
-    const matched = findPhysicalInterfaceOnDevice(
+    const matchRes = findPhysicalInterfaceOnDevice(
+      state,
       firstPeer,
       firstConn.peerInterface,
       initialTag,
       nextHopIp,
     );
-    if (!matched) {
+    if (!matchRes) {
       if (initialTag !== undefined) {
         return {
           ok: false,
@@ -521,7 +505,7 @@ function deliverL2Frame(
       state,
       senderId,
       nextHopIp,
-      matched.mac,
+      matchRes.arpMac,
       egressInterfaceName,
     );
     if (egressIface.ip) {
@@ -530,20 +514,20 @@ function deliverL2Frame(
         firstPeer.id,
         egressIface.ip,
         sourceMac,
-        matched.name,
+        matchRes.iface.name,
       );
     }
 
     return {
       ok: true,
       receiverDevice: nextState.devices[firstPeer.id],
-      receiverInterface: matched,
+      receiverInterface: matchRes.iface,
       switchHops: [],
       nextState,
     };
   }
 
-  // L2 スイッチ網の探索
+  // L2 スイッチ網の探索（STP BLK ポートを除外）
   interface QueueNode {
     switchId: string;
     ingressPort: string;
@@ -552,6 +536,7 @@ function deliverL2Frame(
   }
 
   let updatedState = state;
+  const stpBlocking = computeStpBlockingPortSet(updatedState);
   const visited = new Set<string>();
   const queue: QueueNode[] = [
     {
@@ -622,6 +607,10 @@ function deliverL2Frame(
       continue;
     }
 
+    if (stpBlocking.has(`${sw.id}:${current.ingressPort}:${vlanId}`)) {
+      continue;
+    }
+
     const visitKey = `${sw.id}:${vlanId}`;
     if (visited.has(visitKey)) {
       continue;
@@ -643,6 +632,9 @@ function deliverL2Frame(
         continue;
       }
       if (!isPhysicalInterfaceUp(updatedState, sw.id, outPort.name)) {
+        continue;
+      }
+      if (stpBlocking.has(`${sw.id}:${outPort.name}:${vlanId}`)) {
         continue;
       }
 
@@ -698,26 +690,27 @@ function deliverL2Frame(
         continue;
       }
 
-      const matched = findPhysicalInterfaceOnDevice(
+      const matchRes = findPhysicalInterfaceOnDevice(
+        updatedState,
         peer,
         outConn.peerInterface,
         outgoingTag,
         nextHopIp,
       );
-      if (matched) {
+      if (matchRes) {
         // 到達成功：宛先MAC学習 & 双方ARP学習
         updatedState = upsertMacEntry(
           updatedState,
           sw.id,
           vlanId,
-          matched.mac,
+          matchRes.arpMac,
           outPort.name,
         );
         updatedState = upsertArpEntry(
           updatedState,
           senderId,
           nextHopIp,
-          matched.mac,
+          matchRes.arpMac,
           egressInterfaceName,
         );
         if (egressIface.ip) {
@@ -726,14 +719,14 @@ function deliverL2Frame(
             peer.id,
             egressIface.ip,
             sourceMac,
-            matched.name,
+            matchRes.iface.name,
           );
         }
 
         return {
           ok: true,
           receiverDevice: updatedState.devices[peer.id],
-          receiverInterface: matched,
+          receiverInterface: matchRes.iface,
           switchHops: nextTrail,
           nextState: updatedState,
         };
@@ -806,6 +799,10 @@ interface L3TraceResult {
   hops: PacketHop[];
   nextState: NetworkState;
   sourceIp?: string;
+  effectiveSrcIp?: string;
+  effectiveSrcPort?: number;
+  effectiveDstIp?: string;
+  effectiveDstPort?: number;
   destinationDeviceId?: string;
   failureReason?: PacketFailureReason;
   failureDeviceId?: string;
@@ -813,12 +810,22 @@ interface L3TraceResult {
 }
 
 function findOwnInterfaceByIp(
+  state: NetworkState,
   device: NetworkDevice,
   targetIp: string,
 ): NetworkInterface | null {
+  const direct = Object.values(device.interfaces).find(
+    (iface) => iface.ip === targetIp,
+  );
+  if (direct) {
+    return direct;
+  }
   return (
-    Object.values(device.interfaces).find((iface) => iface.ip === targetIp) ??
-    null
+    Object.values(device.interfaces).find(
+      (iface) =>
+        findActiveHsrpForInterface(state, device.id, iface.name, targetIp) !==
+        null,
+    ) ?? null
   );
 }
 
@@ -919,7 +926,7 @@ function resolveRouterNextHop(
       visitedStatic.add(best.nextHop);
 
       // ネクストホップ自身が自分のIPである誤設定を検知
-      if (findOwnInterfaceByIp(router, best.nextHop)) {
+      if (findOwnInterfaceByIp(state, router, best.nextHop)) {
         return {
           ok: false,
           reason: "No Route to Host",
@@ -979,10 +986,14 @@ function traceL3Path(
     direction?: PacketDirection;
     initialTtl?: number;
     stepOffset?: number;
+    l4Protocol?: "icmp" | "tcp" | "udp";
+    srcPort?: number;
+    dstPort?: number;
   },
 ): L3TraceResult {
   const direction: PacketDirection = options?.direction ?? "request";
   const initialTtl = options?.initialTtl ?? 16;
+  const l4Protocol = options?.l4Protocol ?? "icmp";
   let step = (options?.stepOffset ?? 0) + 1;
   let currentState = state;
   const hops: PacketHop[] = [];
@@ -1021,8 +1032,16 @@ function traceL3Path(
     };
   }
 
+  let currentSrcPort =
+    options?.srcPort ?? (l4Protocol === "icmp" ? 0 : 51000);
+  let currentDstPort = options?.dstPort ?? 0;
+
   // 自機器宛てチェック
-  const ownTargetIface = findOwnInterfaceByIp(sourceDevice, targetIp);
+  const ownTargetIface = findOwnInterfaceByIp(
+    currentState,
+    sourceDevice,
+    targetIp,
+  );
   if (ownTargetIface) {
     if (!ownTargetIface.adminUp) {
       hops.push({
@@ -1054,7 +1073,7 @@ function traceL3Path(
       outgoingInterface: ownTargetIface.name,
       ttl: initialTtl,
       direction,
-      layer: "L3",
+      layer: l4Protocol === "icmp" ? "L3" : "L4",
       action: `ローカル宛先 ${targetIp} に到達`,
       status: "ok",
     });
@@ -1063,6 +1082,10 @@ function traceL3Path(
       hops,
       nextState: currentState,
       sourceIp: targetIp,
+      effectiveSrcIp: targetIp,
+      effectiveSrcPort: currentSrcPort,
+      effectiveDstIp: targetIp,
+      effectiveDstPort: currentDstPort,
       destinationDeviceId: sourceDevice.id,
     };
   }
@@ -1104,6 +1127,43 @@ function traceL3Path(
     egressIfaceName = resolved.egressInterface.name;
     nextHopIp = resolved.nextHopIp;
     sourceIp = resolved.egressInterface.ip ?? targetIp;
+
+    if (resolved.egressInterface.outboundAcl) {
+      const aclName = resolved.egressInterface.outboundAcl;
+      const aclCheck = evaluateAcl(currentState, sourceDevice.id, aclName, {
+        protocol: l4Protocol,
+        srcIp: sourceIp,
+        dstIp: targetIp,
+        srcPort: currentSrcPort,
+        dstPort: currentDstPort,
+      });
+      currentState = aclCheck.nextState;
+      if (aclCheck.action === "deny") {
+        const reason: PacketFailureReason = `Blocked by ACL (${aclName} out on ${egressIfaceName})`;
+        const msg = `${sourceDevice.hostname} ${egressIfaceName} の Outbound ACL (${aclName}) によりブロックされました${aclCheck.isImplicitDeny ? "（暗黙の deny）" : ""}。`;
+        hops.push({
+          step,
+          deviceId: sourceDevice.id,
+          hostname: sourceDevice.hostname,
+          outgoingInterface: egressIfaceName,
+          ttl: initialTtl,
+          direction,
+          layer: l4Protocol === "icmp" ? "L3" : "L4",
+          action: msg,
+          status: "error",
+          errorReason: reason,
+        });
+        return {
+          success: false,
+          hops,
+          nextState: currentState,
+          sourceIp,
+          failureReason: reason,
+          failureDeviceId: sourceDevice.id,
+          failureMessage: msg,
+        };
+      }
+    }
   } else {
     const primary = getHostPrimaryIpInterface(currentState, sourceDevice);
     if (!primary || !primary.ip || !primary.subnetMask) {
@@ -1211,7 +1271,14 @@ function traceL3Path(
     }
   }
 
+  let currentSrcIp = sourceIp;
+  let currentDstIp = targetIp;
+
   let ttl = initialTtl;
+  const protoLabel =
+    l4Protocol === "icmp"
+      ? ""
+      : ` (${l4Protocol.toUpperCase()} :${currentSrcPort}→:${currentDstPort})`;
   hops.push({
     step,
     deviceId: currentDevice.id,
@@ -1219,8 +1286,8 @@ function traceL3Path(
     outgoingInterface: egressIfaceName,
     ttl,
     direction,
-    layer: "L3",
-    action: `${sourceIp} → ${targetIp} へ送信開始 (Next-Hop: ${nextHopIp})`,
+    layer: l4Protocol === "icmp" ? "L3" : "L4",
+    action: `${currentSrcIp} → ${currentDstIp}${protoLabel} 送信開始 (Next-Hop: ${nextHopIp})`,
     status: "ok",
   });
   step += 1;
@@ -1255,6 +1322,10 @@ function traceL3Path(
         hops,
         nextState: currentState,
         sourceIp,
+        effectiveSrcIp: currentSrcIp,
+        effectiveSrcPort: currentSrcPort,
+        effectiveDstIp: currentDstIp,
+        effectiveDstPort: currentDstPort,
         failureReason: l2Result.failureReason,
         failureDeviceId: l2Result.failureDeviceId,
         failureMessage: l2Result.failureMessage,
@@ -1265,13 +1336,89 @@ function traceL3Path(
     const receiver = l2Result.receiverDevice;
     const receiverIface = l2Result.receiverInterface;
 
-    // 宛先IPに到達したか確認
+    // 1. Router Inbound ACL チェック
+    if (receiver.type === "router" && receiverIface.inboundAcl) {
+      const aclName = receiverIface.inboundAcl;
+      const inAclCheck = evaluateAcl(currentState, receiver.id, aclName, {
+        protocol: l4Protocol,
+        srcIp: currentSrcIp,
+        dstIp: currentDstIp,
+        srcPort: currentSrcPort,
+        dstPort: currentDstPort,
+      });
+      currentState = inAclCheck.nextState;
+
+      if (inAclCheck.action === "deny") {
+        const reason: PacketFailureReason = `Blocked by ACL (${aclName} in on ${receiverIface.name})`;
+        const msg = `${receiver.hostname} ${receiverIface.name} の Inbound ACL (${aclName}) によりブロックされました${inAclCheck.isImplicitDeny ? "（暗黙の deny）" : ""}。`;
+        hops.push({
+          step,
+          deviceId: receiver.id,
+          hostname: receiver.hostname,
+          incomingInterface: receiverIface.name,
+          ttl,
+          direction,
+          layer: l4Protocol === "icmp" ? "L3" : "L4",
+          action: msg,
+          status: "error",
+          errorReason: reason,
+        });
+        return {
+          success: false,
+          hops,
+          nextState: currentState,
+          sourceIp,
+          effectiveSrcIp: currentSrcIp,
+          effectiveSrcPort: currentSrcPort,
+          effectiveDstIp: currentDstIp,
+          effectiveDstPort: currentDstPort,
+          failureReason: reason,
+          failureDeviceId: receiver.id,
+          failureMessage: msg,
+        };
+      }
+    }
+
+    // 2. Outside -> Inside 逆NAT 変換
+    let inboundNatHop: NatHopInfo | undefined;
+    if (receiver.type === "router") {
+      const revNat = applyOutsideToInsideNat(
+        currentState,
+        receiver.id,
+        receiverIface.name,
+        {
+          protocol: l4Protocol,
+          srcIp: currentSrcIp,
+          dstIp: currentDstIp,
+          srcPort: currentSrcPort,
+          dstPort: currentDstPort,
+        },
+      );
+      currentState = revNat.nextState;
+      if (revNat.translated && revNat.translatedIp) {
+        currentDstIp = revNat.translatedIp;
+        if (revNat.translatedPort !== undefined) {
+          currentDstPort = revNat.translatedPort;
+        }
+        inboundNatHop = revNat.hopInfo;
+      }
+    }
+
+    // 3. 宛先IP（またはActive HSRP VIP）に到達したか確認
     const matchedTarget =
       receiver.type === "router"
         ? Object.values(receiver.interfaces).find(
-            (iface) => iface.ip === targetIp && iface.adminUp,
+            (iface) =>
+              iface.adminUp &&
+              (iface.ip === currentDstIp ||
+                findActiveHsrpForInterface(
+                  currentState,
+                  receiver.id,
+                  iface.name,
+                  currentDstIp,
+                ) !== null),
           )
-        : receiverIface.ip === targetIp
+        : receiverIface.ip === currentDstIp
           ? receiverIface
           : undefined;
 
@@ -1284,22 +1431,27 @@ function traceL3Path(
         vlanTag: receiverIface.dot1qVlan,
         ttl,
         direction,
-        layer: "L3",
-        action: `${receiver.hostname} (${targetIp}) が受信`,
+        layer: l4Protocol === "icmp" ? "L3" : "L4",
+        action: `${receiver.hostname} (${currentDstIp}${l4Protocol !== "icmp" ? `:${currentDstPort}` : ""}) が受信`,
         status: "ok",
+        ...(inboundNatHop ? { natTranslation: inboundNatHop } : {}),
       });
       return {
         success: true,
         hops,
         nextState: currentState,
         sourceIp,
+        effectiveSrcIp: currentSrcIp,
+        effectiveSrcPort: currentSrcPort,
+        effectiveDstIp: currentDstIp,
+        effectiveDstPort: currentDstPort,
         destinationDeviceId: receiver.id,
       };
     }
 
-    // 中継ルータでのL3フォワーディング
+    // 4. 中継ルータでのL3フォワーディング
     if (receiver.type !== "router") {
-      const msg = `${receiver.hostname} はルータではないため ${targetIp} へ転送できません。`;
+      const msg = `${receiver.hostname} はルータではないため ${currentDstIp} へ転送できません。`;
       hops.push({
         step,
         deviceId: receiver.id,
@@ -1317,6 +1469,10 @@ function traceL3Path(
         hops,
         nextState: currentState,
         sourceIp,
+        effectiveSrcIp: currentSrcIp,
+        effectiveSrcPort: currentSrcPort,
+        effectiveDstIp: currentDstIp,
+        effectiveDstPort: currentDstPort,
         failureReason: "No Route to Host",
         failureDeviceId: receiver.id,
         failureMessage: msg,
@@ -1343,6 +1499,10 @@ function traceL3Path(
         hops,
         nextState: currentState,
         sourceIp,
+        effectiveSrcIp: currentSrcIp,
+        effectiveSrcPort: currentSrcPort,
+        effectiveDstIp: currentDstIp,
+        effectiveDstPort: currentDstPort,
         failureReason: "TTL Exceeded",
         failureDeviceId: receiver.id,
         failureMessage: msg,
@@ -1354,7 +1514,7 @@ function traceL3Path(
       currentState,
       receiver,
       routes,
-      targetIp,
+      currentDstIp,
     );
     if (!nextResolved.ok) {
       hops.push({
@@ -1374,11 +1534,91 @@ function traceL3Path(
         hops,
         nextState: currentState,
         sourceIp,
+        effectiveSrcIp: currentSrcIp,
+        effectiveSrcPort: currentSrcPort,
+        effectiveDstIp: currentDstIp,
+        effectiveDstPort: currentDstPort,
         failureReason: nextResolved.reason,
         failureDeviceId: receiver.id,
         failureMessage: nextResolved.message,
       };
     }
+
+    // 5. Inside -> Outside NAT 変換
+    let outboundNatHop: NatHopInfo | undefined;
+    const outNat = applyInsideToOutsideNat(
+      currentState,
+      receiver.id,
+      receiverIface.name,
+      nextResolved.egressInterface.name,
+      {
+        protocol: l4Protocol,
+        srcIp: currentSrcIp,
+        dstIp: currentDstIp,
+        srcPort: currentSrcPort,
+        dstPort: currentDstPort,
+      },
+    );
+    currentState = outNat.nextState;
+    if (outNat.translated && outNat.translatedIp) {
+      currentSrcIp = outNat.translatedIp;
+      if (outNat.translatedPort !== undefined) {
+        currentSrcPort = outNat.translatedPort;
+      }
+      outboundNatHop = outNat.hopInfo;
+    }
+
+    // 6. Router Outbound ACL チェック
+    if (nextResolved.egressInterface.outboundAcl) {
+      const aclName = nextResolved.egressInterface.outboundAcl;
+      const outAclCheck = evaluateAcl(currentState, receiver.id, aclName, {
+        protocol: l4Protocol,
+        srcIp: currentSrcIp,
+        dstIp: currentDstIp,
+        srcPort: currentSrcPort,
+        dstPort: currentDstPort,
+      });
+      currentState = outAclCheck.nextState;
+
+      if (outAclCheck.action === "deny") {
+        const reason: PacketFailureReason = `Blocked by ACL (${aclName} out on ${nextResolved.egressInterface.name})`;
+        const msg = `${receiver.hostname} ${nextResolved.egressInterface.name} の Outbound ACL (${aclName}) によりブロックされました${outAclCheck.isImplicitDeny ? "（暗黙の deny）" : ""}。`;
+        hops.push({
+          step,
+          deviceId: receiver.id,
+          hostname: receiver.hostname,
+          incomingInterface: receiverIface.name,
+          outgoingInterface: nextResolved.egressInterface.name,
+          ttl,
+          direction,
+          layer: l4Protocol === "icmp" ? "L3" : "L4",
+          action: msg,
+          status: "error",
+          errorReason: reason,
+          ...(outboundNatHop || inboundNatHop
+            ? { natTranslation: outboundNatHop ?? inboundNatHop }
+            : {}),
+        });
+        return {
+          success: false,
+          hops,
+          nextState: currentState,
+          sourceIp,
+          effectiveSrcIp: currentSrcIp,
+          effectiveSrcPort: currentSrcPort,
+          effectiveDstIp: currentDstIp,
+          effectiveDstPort: currentDstPort,
+          failureReason: reason,
+          failureDeviceId: receiver.id,
+          failureMessage: msg,
+        };
+      }
+    }
+
+    const activeNat = outboundNatHop ?? inboundNatHop;
+    const natNote = activeNat
+      ? `NAPT変換 (${activeNat.beforeIp}${activeNat.beforePort ? `:${activeNat.beforePort}` : ""} → ${activeNat.afterIp}${activeNat.afterPort ? `:${activeNat.afterPort}` : ""}) → `
+      : "";
 
     hops.push({
       step,
@@ -1390,8 +1630,9 @@ function traceL3Path(
       ttl,
       direction,
       layer: "L3",
-      action: `LPM経路選択 → ${nextResolved.egressInterface.name} (Next-Hop: ${nextResolved.nextHopIp}, TTL=${ttl})`,
+      action: `${natNote}LPM経路選択 → ${nextResolved.egressInterface.name} (Next-Hop: ${nextResolved.nextHopIp}, TTL=${ttl})`,
       status: "ok",
+      ...(activeNat ? { natTranslation: activeNat } : {}),
     });
     step += 1;
 
@@ -1405,6 +1646,10 @@ function traceL3Path(
     hops,
     nextState: currentState,
     sourceIp,
+    effectiveSrcIp: currentSrcIp,
+    effectiveSrcPort: currentSrcPort,
+    effectiveDstIp: currentDstIp,
+    effectiveDstPort: currentDstPort,
     failureReason: "TTL Exceeded",
     failureDeviceId: currentDevice.id,
     failureMessage: "TTL Exceeded",
@@ -1502,6 +1747,9 @@ export function simulateNslookup(
   const dnsServerIp = device.dnsServer;
   const queryTrace = traceL3Path(state, device.id, dnsServerIp, {
     direction: "dns-query",
+    l4Protocol: "udp",
+    srcPort: 53053,
+    dstPort: 53,
   });
 
   if (!queryTrace.success || !queryTrace.destinationDeviceId) {
@@ -1577,13 +1825,17 @@ export function simulateNslookup(
   // DNS 応答の復路検証
   let currentState = queryTrace.nextState;
   const combinedHops = [...queryTrace.hops];
-  if (queryTrace.sourceIp) {
+  const dnsReturnIp = queryTrace.effectiveSrcIp ?? queryTrace.sourceIp;
+  if (dnsReturnIp) {
     const replyTrace = traceL3Path(
       currentState,
       dnsServerDevice.id,
-      queryTrace.sourceIp,
+      dnsReturnIp,
       {
         direction: "dns-response",
+        l4Protocol: "udp",
+        srcPort: queryTrace.effectiveDstPort ?? 53,
+        dstPort: queryTrace.effectiveSrcPort ?? 53053,
         stepOffset: combinedHops.length,
       },
     );
@@ -1810,16 +2062,21 @@ export function simulatePing(
   }
 
   // 復路（ICMP Echo Reply）検証
+  const pingReturnTargetIp =
+    forwardTrace.effectiveSrcIp ?? forwardTrace.sourceIp;
   if (
     forwardTrace.destinationDeviceId !== deviceId &&
-    forwardTrace.sourceIp
+    pingReturnTargetIp
   ) {
     const returnTrace = traceL3Path(
       currentState,
       forwardTrace.destinationDeviceId,
-      forwardTrace.sourceIp,
+      pingReturnTargetIp,
       {
         direction: "reply",
+        l4Protocol: "icmp",
+        srcPort: forwardTrace.effectiveDstPort ?? 0,
+        dstPort: forwardTrace.effectiveSrcPort ?? 0,
         stepOffset: allHops.length,
       },
     );
@@ -1990,4 +2247,693 @@ export function simulateTraceroute(
     nextState: currentState,
     output: lines.join("\n"),
   };
+}
+
+export function simulateTcpConnect(
+  state: NetworkState,
+  deviceId: string,
+  targetInput: string,
+  port: number,
+  mode: "curl" | "nc",
+  options?: { verbose?: boolean; isHttps?: boolean },
+): SimulationOutput {
+  const device = state.devices[deviceId];
+  const cleanTarget = targetInput.trim();
+  const verbose = options?.verbose ?? false;
+  const isHttps = options?.isHttps ?? port === 443;
+  const wasHostname = !isValidIpv4(cleanTarget);
+
+  if (!device) {
+    const trace: PacketTraceResult = {
+      protocol: mode === "curl" ? "http" : "tcp",
+      sourceDeviceId: deviceId,
+      dstPort: port,
+      targetInput: cleanTarget,
+      success: false,
+      failureReason: "Invalid Destination",
+      failureMessage: `デバイス "${deviceId}" が見つかりません。`,
+      hops: [],
+    };
+    return { trace, nextState: state, output: trace.failureMessage ?? "" };
+  }
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const msg = `不正なポート番号です: ${String(port)} (1〜65535)`;
+    const trace: PacketTraceResult = {
+      protocol: mode === "curl" ? "http" : "tcp",
+      sourceDeviceId: device.id,
+      targetInput: cleanTarget,
+      success: false,
+      failureReason: "Invalid Destination",
+      failureDeviceId: device.id,
+      failureMessage: msg,
+      hops: [],
+    };
+    return { trace, nextState: state, output: `% ${msg}` };
+  }
+
+  let currentState = state;
+  const allHops: PacketHop[] = [];
+  let resolvedIp = cleanTarget;
+  let dnsServerIp: string | undefined;
+
+  if (!isValidIpv4(cleanTarget)) {
+    const dnsOut = simulateNslookup(currentState, deviceId, cleanTarget);
+    currentState = dnsOut.nextState;
+    allHops.push(...dnsOut.trace.hops);
+    dnsServerIp = dnsOut.trace.dnsServerIp;
+
+    if (!dnsOut.trace.success || !dnsOut.trace.resolvedIp) {
+      const trace: PacketTraceResult = {
+        protocol: mode === "curl" ? "http" : "tcp",
+        sourceDeviceId: deviceId,
+        sourceIp: dnsOut.trace.sourceIp,
+        dstPort: port,
+        targetInput: cleanTarget,
+        dnsServerIp,
+        success: false,
+        failureReason: dnsOut.trace.failureReason,
+        failureDeviceId: dnsOut.trace.failureDeviceId,
+        failureMessage: dnsOut.trace.failureMessage,
+        hops: allHops,
+      };
+      const errOut =
+        mode === "curl"
+          ? verbose
+            ? [
+                `* Resolving host ${cleanTarget} via DNS (${dnsServerIp ?? "unconfigured"})...`,
+                `curl: (6) Could not resolve host: ${cleanTarget} (${dnsOut.trace.failureReason})`,
+              ].join("\n")
+            : `curl: (6) Could not resolve host: ${cleanTarget} (${dnsOut.trace.failureReason})`
+          : `nc: getaddrinfo: ${cleanTarget} (${dnsOut.trace.failureReason})`;
+      return { trace, nextState: currentState, output: errOut };
+    }
+    resolvedIp = dnsOut.trace.resolvedIp;
+  }
+
+  const verboseIntroLines: string[] = verbose
+    ? [
+        ...(wasHostname
+          ? [
+              `* Resolving host ${cleanTarget} via ${dnsServerIp ?? "DNS"}...`,
+              `* Resolved ${cleanTarget} -> ${resolvedIp}`,
+            ]
+          : []),
+        `*   Trying ${resolvedIp}:${port}...`,
+      ]
+    : [];
+
+  const clientSrcPort = 51000 + (port % 1000);
+  const forwardTrace = traceL3Path(currentState, deviceId, resolvedIp, {
+    direction: "request",
+    l4Protocol: "tcp",
+    srcPort: clientSrcPort,
+    dstPort: port,
+    stepOffset: allHops.length,
+  });
+  currentState = forwardTrace.nextState;
+  allHops.push(...forwardTrace.hops);
+
+  if (!forwardTrace.success || !forwardTrace.destinationDeviceId) {
+    const trace: PacketTraceResult = {
+      protocol: mode === "curl" ? "http" : "tcp",
+      sourceDeviceId: deviceId,
+      sourceIp: forwardTrace.sourceIp,
+      srcPort: clientSrcPort,
+      dstPort: port,
+      targetInput: cleanTarget,
+      resolvedIp,
+      dnsServerIp,
+      success: false,
+      failureReason: forwardTrace.failureReason,
+      failureDeviceId: forwardTrace.failureDeviceId,
+      failureMessage: forwardTrace.failureMessage,
+      hops: allHops,
+    };
+    const errOut =
+      mode === "curl"
+        ? [
+            ...verboseIntroLines,
+            `curl: (7) Failed to connect to ${cleanTarget} port ${port}: ${forwardTrace.failureReason} (${forwardTrace.failureMessage ?? ""})`,
+          ].join("\n")
+        : `nc: connect to ${cleanTarget} (${resolvedIp}) port ${port} (tcp) failed: ${forwardTrace.failureReason}`;
+    return { trace, nextState: currentState, output: errOut };
+  }
+
+  const destDevice = currentState.devices[forwardTrace.destinationDeviceId];
+  const isPortListening = (() => {
+    if (!destDevice) {
+      return false;
+    }
+    if (destDevice.listeningServices !== undefined) {
+      return destDevice.listeningServices.some(
+        (svc) => svc.protocol === "tcp" && svc.port === port && svc.active,
+      );
+    }
+    return destDevice.type === "server" && (port === 80 || port === 443);
+  })();
+
+  if (!isPortListening) {
+    const msg = `${destDevice?.hostname ?? resolvedIp} の TCP ポート ${port} は待ち受けていません (TCP [RST, ACK])。`;
+    allHops.push({
+      step: allHops.length + 1,
+      deviceId: forwardTrace.destinationDeviceId,
+      hostname: destDevice?.hostname ?? resolvedIp,
+      direction: "reply",
+      layer: "L4",
+      action: msg,
+      status: "error",
+      errorReason: "Connection Refused",
+    });
+    const trace: PacketTraceResult = {
+      protocol: mode === "curl" ? "http" : "tcp",
+      sourceDeviceId: deviceId,
+      sourceIp: forwardTrace.sourceIp,
+      srcPort: clientSrcPort,
+      dstPort: port,
+      targetInput: cleanTarget,
+      resolvedIp,
+      dnsServerIp,
+      success: false,
+      failureReason: "Connection Refused",
+      failureDeviceId: forwardTrace.destinationDeviceId,
+      failureMessage: msg,
+      hops: allHops,
+    };
+    const errOut =
+      mode === "curl"
+        ? [
+            ...verboseIntroLines,
+            ...(verbose
+              ? [`* TCP [RST, ACK] received (port ${port} closed)`]
+              : []),
+            `curl: (7) Failed to connect to ${cleanTarget} port ${port}: Connection refused`,
+          ].join("\n")
+        : `nc: connect to ${cleanTarget} (${resolvedIp}) port ${port} (tcp) failed: Connection refused`;
+    return { trace, nextState: currentState, output: errOut };
+  }
+
+  // 復路 TCP [SYN, ACK] 検証
+  const replyTargetIp = forwardTrace.effectiveSrcIp ?? forwardTrace.sourceIp;
+  if (forwardTrace.destinationDeviceId !== deviceId && replyTargetIp) {
+    const returnTrace = traceL3Path(
+      currentState,
+      forwardTrace.destinationDeviceId,
+      replyTargetIp,
+      {
+        direction: "reply",
+        l4Protocol: "tcp",
+        srcPort: port,
+        dstPort: forwardTrace.effectiveSrcPort ?? clientSrcPort,
+        stepOffset: allHops.length,
+      },
+    );
+    currentState = returnTrace.nextState;
+    allHops.push(...returnTrace.hops);
+
+    if (!returnTrace.success) {
+      const msg = `復路 (TCP SYN/ACK) 失敗: ${returnTrace.failureMessage ?? returnTrace.failureReason ?? ""}`;
+      const trace: PacketTraceResult = {
+        protocol: mode === "curl" ? "http" : "tcp",
+        sourceDeviceId: deviceId,
+        sourceIp: forwardTrace.sourceIp,
+        srcPort: clientSrcPort,
+        dstPort: port,
+        targetInput: cleanTarget,
+        resolvedIp,
+        dnsServerIp,
+        success: false,
+        failureReason: returnTrace.failureReason,
+        failureDeviceId: returnTrace.failureDeviceId,
+        failureMessage: msg,
+        hops: allHops,
+      };
+      const errOut =
+        mode === "curl"
+          ? [
+              ...verboseIntroLines,
+              `curl: (28) Connection timed out (${returnTrace.failureReason})`,
+            ].join("\n")
+          : `nc: connect to ${cleanTarget} (${resolvedIp}) port ${port} (tcp) failed: ${returnTrace.failureReason}`;
+      return { trace, nextState: currentState, output: errOut };
+    }
+  }
+
+  const trace: PacketTraceResult = {
+    protocol: mode === "curl" ? "http" : "tcp",
+    sourceDeviceId: deviceId,
+    sourceIp: forwardTrace.sourceIp,
+    srcPort: clientSrcPort,
+    dstPort: port,
+    targetInput: cleanTarget,
+    resolvedIp,
+    dnsServerIp,
+    success: true,
+    hops: allHops,
+  };
+
+  const matchedSvc = destDevice?.listeningServices?.find(
+    (s) => s.protocol === "tcp" && s.port === port && s.active,
+  );
+  const serviceName =
+    matchedSvc?.serviceName ?? (port === 443 ? "https" : "http");
+  const procLabel = matchedSvc?.processName ?? "nginx";
+
+  const tlsLines =
+    verbose && isHttps
+      ? [
+          "* ALPN: offers h2,http/1.1",
+          "* TLSv1.3 (OUT), TLS handshake, Client hello (1):",
+          "* TLSv1.3 (IN), TLS handshake, Server hello (2):",
+          "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384",
+          `* Server certificate: subject: CN=${cleanTarget}; issuer: CN=NetForge CA; verify ok`,
+        ]
+      : [];
+
+  const okOut =
+    mode === "curl"
+      ? verbose
+        ? [
+            ...verboseIntroLines,
+            `* Connected to ${cleanTarget} (${resolvedIp}) port ${port} [TCP 3-Way Handshake: SYN -> SYN-ACK -> ACK]`,
+            ...tlsLines,
+            `> GET / HTTP/1.1`,
+            `> Host: ${cleanTarget}`,
+            `> User-Agent: curl/8.5.0`,
+            `< HTTP/1.1 200 OK`,
+            `< Server: ${procLabel}/1.24.0 (${destDevice?.hostname ?? "Web-Server"})`,
+            "",
+            `<html><body><h1>200 OK from ${destDevice?.hostname ?? resolvedIp}</h1></body></html>`,
+          ].join("\n")
+        : [
+            `* Connected to ${cleanTarget} (${resolvedIp}) port ${port}`,
+            `> GET / HTTP/1.1`,
+            `> Host: ${cleanTarget}`,
+            `< HTTP/1.1 200 OK`,
+            `< Server: ${destDevice?.hostname ?? "Web-Server"} (${serviceName})`,
+            "",
+            `<html><body><h1>200 OK from ${destDevice?.hostname ?? resolvedIp}</h1></body></html>`,
+          ].join("\n")
+      : `Connection to ${cleanTarget} (${resolvedIp}) ${port} port [tcp/${serviceName}] succeeded!`;
+
+  return { trace, nextState: currentState, output: okOut };
+}
+
+interface DhcpDiscoveryHit {
+  serverDeviceId: string;
+  serverInterfaceName: string;
+  switchHops: L2SwitchTrailItem[];
+}
+
+function findDhcpServerInBroadcastDomain(
+  state: NetworkState,
+  clientId: string,
+  clientPhysPort: string,
+  clientMac: string,
+): DhcpDiscoveryHit | null {
+  const firstConn = findConnectedLink(state, clientId, clientPhysPort);
+  if (!firstConn || !firstConn.link.up) {
+    return null;
+  }
+
+  const firstPeer = state.devices[firstConn.peerDeviceId];
+  const firstPeerIface = firstPeer?.interfaces[firstConn.peerInterface];
+  if (!firstPeer || !firstPeerIface || !firstPeerIface.adminUp) {
+    return null;
+  }
+
+  if (firstPeer.type !== "switch") {
+    if (
+      firstPeer.dhcpPools &&
+      Object.keys(firstPeer.dhcpPools).length > 0
+    ) {
+      return {
+        serverDeviceId: firstPeer.id,
+        serverInterfaceName: firstConn.peerInterface,
+        switchHops: [],
+      };
+    }
+    return null;
+  }
+
+  const stpBlocking = computeStpBlockingPortSet(state);
+  const visited = new Set<string>();
+  const queue: Array<{
+    switchId: string;
+    ingressPort: string;
+    incomingTag?: number;
+    trail: L2SwitchTrailItem[];
+  }> = [
+    {
+      switchId: firstPeer.id,
+      ingressPort: firstConn.peerInterface,
+      trail: [],
+    },
+  ];
+
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const sw = state.devices[cur.switchId];
+    if (!sw || sw.type !== "switch") {
+      continue;
+    }
+
+    const ingressIface = sw.interfaces[cur.ingressPort];
+    if (!ingressIface || !ingressIface.adminUp) {
+      continue;
+    }
+    const mode = ingressIface.switchportMode ?? "access";
+    if (mode === "access" && cur.incomingTag !== undefined) {
+      continue;
+    }
+    const vlanId =
+      mode === "access" ? (ingressIface.accessVlan ?? 1) : (cur.incomingTag ?? 1);
+    if (
+      mode === "trunk" &&
+      ingressIface.trunkAllowedVlans !== undefined &&
+      !ingressIface.trunkAllowedVlans.includes(vlanId)
+    ) {
+      continue;
+    }
+    if (!sw.vlans[vlanId]?.active) {
+      continue;
+    }
+    if (stpBlocking.has(`${sw.id}:${cur.ingressPort}:${vlanId}`)) {
+      continue;
+    }
+
+    const visitKey = `${sw.id}:${vlanId}`;
+    if (visited.has(visitKey)) {
+      continue;
+    }
+    visited.add(visitKey);
+
+    for (const outPort of Object.values(sw.interfaces)) {
+      if (outPort.name === cur.ingressPort) {
+        continue;
+      }
+      if (!isPhysicalInterfaceUp(state, sw.id, outPort.name)) {
+        continue;
+      }
+      if (stpBlocking.has(`${sw.id}:${outPort.name}:${vlanId}`)) {
+        continue;
+      }
+      const outMode = outPort.switchportMode ?? "access";
+      if (outMode === "access" && (outPort.accessVlan ?? 1) !== vlanId) {
+        continue;
+      }
+      if (
+        outMode === "trunk" &&
+        outPort.trunkAllowedVlans !== undefined &&
+        !outPort.trunkAllowedVlans.includes(vlanId)
+      ) {
+        continue;
+      }
+
+      const outConn = findConnectedLink(state, sw.id, outPort.name);
+      if (!outConn) {
+        continue;
+      }
+      const peer = state.devices[outConn.peerDeviceId];
+      if (!peer) {
+        continue;
+      }
+
+      const nextTrail: L2SwitchTrailItem[] = [
+        ...cur.trail,
+        {
+          switchId: sw.id,
+          hostname: sw.hostname,
+          ingressPort: cur.ingressPort,
+          egressPort: outPort.name,
+          vlanId,
+          sourceMac: clientMac,
+        },
+      ];
+
+      if (peer.type === "switch") {
+        queue.push({
+          switchId: peer.id,
+          ingressPort: outConn.peerInterface,
+          incomingTag: outMode === "trunk" ? vlanId : undefined,
+          trail: nextTrail,
+        });
+        continue;
+      }
+
+      if (peer.dhcpPools && Object.keys(peer.dhcpPools).length > 0) {
+        let targetIfaceName = outConn.peerInterface;
+        if (outMode === "trunk") {
+          const subMatch = Object.values(peer.interfaces).find(
+            (i) =>
+              i.isSubinterface &&
+              getPhysicalInterfaceName(i) === outConn.peerInterface &&
+              i.dot1qVlan === vlanId &&
+              i.adminUp,
+          );
+          if (subMatch) {
+            targetIfaceName = subMatch.name;
+          } else if (vlanId !== 1) {
+            continue;
+          }
+        }
+        if (peer.interfaces[targetIfaceName]?.adminUp) {
+          return {
+            serverDeviceId: peer.id,
+            serverInterfaceName: targetIfaceName,
+            switchHops: nextTrail,
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+export function simulateDhcpRenew(
+  state: NetworkState,
+  clientDeviceId: string,
+): SimulationOutput {
+  const client = state.devices[clientDeviceId];
+  if (!client) {
+    const trace: PacketTraceResult = {
+      protocol: "dhcp",
+      sourceDeviceId: clientDeviceId,
+      targetInput: "DHCP Discover",
+      success: false,
+      failureReason: "DHCP Failed",
+      failureMessage: `デバイス "${clientDeviceId}" が見つかりません。`,
+      hops: [],
+    };
+    return { trace, nextState: state, output: trace.failureMessage ?? "" };
+  }
+
+  const primaryIface =
+    Object.values(client.interfaces).find(
+      (i) => !isLoopbackInterfaceName(i.name),
+    ) ?? Object.values(client.interfaces)[0];
+
+  if (!primaryIface) {
+    const msg = `${client.hostname} にネットワークインターフェースがありません。`;
+    const trace: PacketTraceResult = {
+      protocol: "dhcp",
+      sourceDeviceId: client.id,
+      targetInput: "DHCP Discover",
+      success: false,
+      failureReason: "DHCP Failed",
+      failureDeviceId: client.id,
+      failureMessage: msg,
+      hops: [],
+    };
+    return { trace, nextState: state, output: `% ${msg}` };
+  }
+
+  if (!isPhysicalInterfaceUp(state, client.id, primaryIface.name)) {
+    const msg = `${client.hostname} ${primaryIface.name} のリンクがダウンしているため DHCP を取得できません。`;
+    const trace: PacketTraceResult = {
+      protocol: "dhcp",
+      sourceDeviceId: client.id,
+      targetInput: "DHCP Discover",
+      success: false,
+      failureReason: "Link Down",
+      failureDeviceId: client.id,
+      failureMessage: msg,
+      hops: [
+        {
+          step: 1,
+          deviceId: client.id,
+          hostname: client.hostname,
+          outgoingInterface: primaryIface.name,
+          direction: "request",
+          layer: "L1",
+          action: msg,
+          status: "error",
+          errorReason: "Link Down",
+        },
+      ],
+    };
+    return { trace, nextState: state, output: `DHCP failed: ${msg}` };
+  }
+
+  const hops: PacketHop[] = [
+    {
+      step: 1,
+      deviceId: client.id,
+      hostname: client.hostname,
+      outgoingInterface: primaryIface.name,
+      direction: "request",
+      layer: "L7",
+      action: `DHCP Discover をブロードキャスト送信 (MAC: ${primaryIface.mac})`,
+      status: "ok",
+    },
+  ];
+
+  const discovery = findDhcpServerInBroadcastDomain(
+    state,
+    client.id,
+    primaryIface.name,
+    primaryIface.mac,
+  );
+
+  if (!discovery) {
+    const msg =
+      "同一ブロードキャストドメイン内に到達可能な DHCP サーバが見つかりません。";
+    hops.push({
+      step: 2,
+      deviceId: client.id,
+      hostname: client.hostname,
+      outgoingInterface: primaryIface.name,
+      direction: "request",
+      layer: "L7",
+      action: msg,
+      status: "error",
+      errorReason: "DHCP Failed",
+    });
+    const trace: PacketTraceResult = {
+      protocol: "dhcp",
+      sourceDeviceId: client.id,
+      targetInput: "DHCP Discover",
+      success: false,
+      failureReason: "DHCP Failed",
+      failureDeviceId: client.id,
+      failureMessage: msg,
+      hops,
+    };
+    return {
+      trace,
+      nextState: state,
+      output: `An error occurred while renewing interface ${primaryIface.name}: ${msg}`,
+    };
+  }
+
+  let step = appendSwitchHops(hops, discovery.switchHops, "request", 1, 2);
+  const lease = allocateDhcpLease(
+    state,
+    discovery.serverDeviceId,
+    discovery.serverInterfaceName,
+    primaryIface.mac,
+    client.hostname,
+  );
+  const serverHost =
+    state.devices[discovery.serverDeviceId]?.hostname ??
+    discovery.serverDeviceId;
+
+  if (!lease.ok) {
+    hops.push({
+      step,
+      deviceId: discovery.serverDeviceId,
+      hostname: serverHost,
+      incomingInterface: discovery.serverInterfaceName,
+      direction: "request",
+      layer: "L7",
+      action: lease.reason,
+      status: "error",
+      errorReason: "DHCP Failed",
+    });
+    const trace: PacketTraceResult = {
+      protocol: "dhcp",
+      sourceDeviceId: client.id,
+      targetInput: "DHCP Discover",
+      success: false,
+      failureReason: "DHCP Failed",
+      failureDeviceId: discovery.serverDeviceId,
+      failureMessage: lease.reason,
+      hops,
+    };
+    return {
+      trace,
+      nextState: state,
+      output: `DHCP failed on ${serverHost}: ${lease.reason}`,
+    };
+  }
+
+  hops.push({
+    step,
+    deviceId: discovery.serverDeviceId,
+    hostname: serverHost,
+    incomingInterface: discovery.serverInterfaceName,
+    outgoingInterface: discovery.serverInterfaceName,
+    direction: "reply",
+    layer: "L7",
+    action: `DHCP Offer/Ack: IP=${lease.ip}/${lease.mask} (Pool: ${lease.poolName})`,
+    status: "ok",
+  });
+  step += 1;
+
+  hops.push({
+    step,
+    deviceId: client.id,
+    hostname: client.hostname,
+    incomingInterface: primaryIface.name,
+    direction: "reply",
+    layer: "L7",
+    action: `DHCP Lease 取得完了: ${lease.ip} (GW: ${lease.defaultRouter ?? "none"}, DNS: ${lease.dnsServer ?? "none"})`,
+    status: "ok",
+  });
+
+  const leasedClient = lease.nextState.devices[client.id];
+  const nextState: NetworkState = {
+    ...lease.nextState,
+    devices: {
+      ...lease.nextState.devices,
+      [client.id]: {
+        ...leasedClient,
+        interfaces: {
+          ...leasedClient.interfaces,
+          [primaryIface.name]: {
+            ...leasedClient.interfaces[primaryIface.name],
+            ip: lease.ip,
+            subnetMask: lease.mask,
+          },
+        },
+        ...(lease.defaultRouter !== undefined
+          ? { defaultGateway: lease.defaultRouter }
+          : {}),
+        ...(lease.dnsServer !== undefined
+          ? { dnsServer: lease.dnsServer }
+          : {}),
+      },
+    },
+  };
+
+  const trace: PacketTraceResult = {
+    protocol: "dhcp",
+    sourceDeviceId: client.id,
+    sourceIp: lease.ip,
+    targetInput: `DHCP Lease (${lease.poolName})`,
+    resolvedIp: lease.ip,
+    success: true,
+    hops,
+  };
+
+  const output = [
+    `DHCP Lease acquired on ${primaryIface.name} from ${serverHost} (Pool: ${lease.poolName}):`,
+    `  IPv4 Address  : ${lease.ip}`,
+    `  Subnet Mask   : ${lease.mask}`,
+    `  Default GW    : ${lease.defaultRouter ?? "Not provided"}`,
+    `  DNS Server    : ${lease.dnsServer ?? "Not provided"}`,
+  ].join("\n");
+
+  return { trace, nextState, output };
 }

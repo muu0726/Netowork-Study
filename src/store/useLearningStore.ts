@@ -14,11 +14,17 @@ export interface DrillStatRecord {
   bestStreak: number;
 }
 
+export interface DomainExamRecord {
+  correct: number;
+  total: number;
+}
+
 export interface PersistedLearningState {
   completedLessonIds: string[];
   completedScenarioIds: string[];
   quizScores: Record<string, QuizScoreRecord>;
   drillStats: Record<string, DrillStatRecord>;
+  diagnosticDomainScores?: Record<string, DomainExamRecord>;
   lastVisitedPath: string | null;
 }
 
@@ -33,6 +39,9 @@ export interface LearningStoreState extends PersistedLearningState {
     isCorrect: boolean,
     currentStreak?: number,
   ) => void;
+  recordDiagnosticResult: (
+    domainScores: Record<string, DomainExamRecord>,
+  ) => void;
   setLastVisitedPath: (path: string) => void;
   resetProgress: () => void;
   setHasHydrated: (hydrated: boolean) => void;
@@ -43,6 +52,7 @@ const initialPersistedState: PersistedLearningState = {
   completedScenarioIds: [],
   quizScores: {},
   drillStats: {},
+  diagnosticDomainScores: {},
   lastVisitedPath: null,
 };
 
@@ -144,6 +154,14 @@ export const useLearningStore = create<LearningStoreState>()(
           };
         }),
 
+      recordDiagnosticResult: (domainScores) =>
+        set((state) => ({
+          diagnosticDomainScores: {
+            ...(state.diagnosticDomainScores ?? {}),
+            ...domainScores,
+          },
+        })),
+
       setLastVisitedPath: (path) =>
         set(() => ({
           lastVisitedPath: path,
@@ -167,6 +185,7 @@ export const useLearningStore = create<LearningStoreState>()(
         completedScenarioIds: state.completedScenarioIds,
         quizScores: state.quizScores,
         drillStats: state.drillStats,
+        diagnosticDomainScores: state.diagnosticDomainScores ?? {},
         lastVisitedPath: state.lastVisitedPath,
       }),
       onRehydrateStorage: () => (state) => {

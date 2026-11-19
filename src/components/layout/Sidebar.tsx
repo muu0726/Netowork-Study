@@ -4,14 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Cloud,
   LayoutDashboard,
   Network,
   ShieldAlert,
+  Target,
   Terminal,
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { LESSONS_META, SCENARIOS_META } from "@/data/curriculum-meta";
+import {
+  CLOUD_SCENARIOS_META,
+  LESSONS_META,
+  SCENARIOS_META,
+} from "@/data/curriculum-meta";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useLearningStore } from "@/store/useLearningStore";
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
@@ -49,10 +55,22 @@ const NAV_ITEMS: NavItem[] = [
     icon: ShieldAlert,
   },
   {
+    href: "/labs/cloud",
+    label: "クラウドVPCラボ",
+    sublabel: "AWS VPC / SG / NACL",
+    icon: Cloud,
+  },
+  {
     href: "/tools",
     label: "実践ツール＆ドリル",
-    sublabel: "Subnet / Packet / Diff",
+    sublabel: "IPv4 / IPv6 / Packet",
     icon: Wrench,
+  },
+  {
+    href: "/exam",
+    label: "総合実力診断",
+    sublabel: "Mock Exam & Radar",
+    icon: Target,
   },
 ];
 
@@ -70,7 +88,8 @@ export function Sidebar({ onNavigate }: SidebarProps) {
     (state) => state.completedScenarioIds,
   );
 
-  const totalItems = LESSONS_META.length + SCENARIOS_META.length;
+  const totalItems =
+    LESSONS_META.length + SCENARIOS_META.length + CLOUD_SCENARIOS_META.length;
   const completedCount =
     completedLessonIds.length + completedScenarioIds.length;
   const overallPercent =
