@@ -1,0 +1,207 @@
+import type { ScenarioDefinition } from "@/lib/network-engine";
+
+export const cliBasicRoutingScenario: ScenarioDefinition = {
+  id: "cli-basic-routing",
+  title: "基本IP設定とL3ルーティング疎通",
+  category: "lab",
+  difficulty: "初級",
+  description:
+    "東京拠点の R1-Tokyo と大阪拠点の R2-Osaka をWANリンク (10.0.0.0/30) で接続し、PC-Tokyo (192.168.10.10) から SRV-Osaka (192.168.20.10) まで双方向で Ping 疎通できる状態に構築してください。",
+  initialState: {
+    devices: {
+      "pc-tokyo": {
+        id: "pc-tokyo",
+        hostname: "PC-Tokyo",
+        type: "pc",
+        position: { x: 90, y: 190 },
+        interfaces: {
+          eth0: {
+            name: "eth0",
+            mac: "00:11:22:01:10:10",
+            adminUp: true,
+            ip: "192.168.10.10",
+            subnetMask: "255.255.255.0",
+          },
+        },
+        vlans: {},
+        staticRoutes: [],
+        arpTable: [],
+        macTable: [],
+        defaultGateway: "192.168.10.1",
+        cliState: { mode: "host" },
+      },
+      r1: {
+        id: "r1",
+        hostname: "R1-Tokyo",
+        type: "router",
+        position: { x: 245, y: 190 },
+        interfaces: {
+          "Gig0/0": {
+            name: "Gig0/0",
+            mac: "00:0c:29:01:00:00",
+            adminUp: true,
+            ip: "192.168.10.1",
+            subnetMask: "255.255.255.0",
+          },
+          "Gig0/1": {
+            name: "Gig0/1",
+            mac: "00:0c:29:01:00:01",
+            adminUp: false,
+          },
+        },
+        vlans: {},
+        staticRoutes: [],
+        arpTable: [],
+        macTable: [],
+        cliState: { mode: "user" },
+      },
+      r2: {
+        id: "r2",
+        hostname: "R2-Osaka",
+        type: "router",
+        position: { x: 435, y: 190 },
+        interfaces: {
+          "Gig0/0": {
+            name: "Gig0/0",
+            mac: "00:0c:29:02:00:00",
+            adminUp: true,
+            ip: "10.0.0.2",
+            subnetMask: "255.255.255.252",
+          },
+          "Gig0/1": {
+            name: "Gig0/1",
+            mac: "00:0c:29:02:00:01",
+            adminUp: true,
+            ip: "192.168.20.1",
+            subnetMask: "255.255.255.0",
+          },
+        },
+        vlans: {},
+        staticRoutes: [],
+        arpTable: [],
+        macTable: [],
+        cliState: { mode: "user" },
+      },
+      "srv-osaka": {
+        id: "srv-osaka",
+        hostname: "SRV-Osaka",
+        type: "server",
+        position: { x: 590, y: 190 },
+        interfaces: {
+          eth0: {
+            name: "eth0",
+            mac: "00:50:56:02:20:10",
+            adminUp: true,
+            ip: "192.168.20.10",
+            subnetMask: "255.255.255.0",
+          },
+        },
+        vlans: {},
+        staticRoutes: [],
+        arpTable: [],
+        macTable: [],
+        defaultGateway: "192.168.20.1",
+        cliState: { mode: "host" },
+      },
+    },
+    links: [
+      {
+        id: "link-pc-r1",
+        fromDeviceId: "pc-tokyo",
+        fromInterface: "eth0",
+        toDeviceId: "r1",
+        toInterface: "Gig0/0",
+        up: true,
+      },
+      {
+        id: "link-r1-r2",
+        fromDeviceId: "r1",
+        fromInterface: "Gig0/1",
+        toDeviceId: "r2",
+        toInterface: "Gig0/0",
+        up: true,
+      },
+      {
+        id: "link-r2-srv",
+        fromDeviceId: "r2",
+        fromInterface: "Gig0/1",
+        toDeviceId: "srv-osaka",
+        toInterface: "eth0",
+        up: true,
+      },
+    ],
+  },
+  goals: [
+    {
+      type: "interface_config",
+      id: "goal-r1-g01",
+      description:
+        "R1-Tokyo の Gig0/1 に 10.0.0.1 / 255.255.255.252 を設定し有効化 (no shutdown) する",
+      deviceId: "r1",
+      interfaceName: "Gig0/1",
+      expectedIp: "10.0.0.1",
+      expectedMask: "255.255.255.252",
+      expectedAdminUp: true,
+    },
+    {
+      type: "route_exists",
+      id: "goal-r1-route",
+      description:
+        "R1-Tokyo に 192.168.20.0/24 宛て (Next-Hop: 10.0.0.2) のスタティックルートを設定する",
+      deviceId: "r1",
+      destination: "192.168.20.0",
+      mask: "255.255.255.0",
+      nextHop: "10.0.0.2",
+    },
+    {
+      type: "route_exists",
+      id: "goal-r2-route",
+      description:
+        "R2-Osaka に戻りルート 192.168.10.0/24 宛て (Next-Hop: 10.0.0.1) を設定する",
+      deviceId: "r2",
+      destination: "192.168.10.0",
+      mask: "255.255.255.0",
+      nextHop: "10.0.0.1",
+    },
+    {
+      type: "ping",
+      id: "goal-ping",
+      description: "PC-Tokyo から SRV-Osaka (192.168.20.10) への往復 Ping が成功する",
+      sourceDeviceId: "pc-tokyo",
+      target: "192.168.20.10",
+    },
+  ],
+  hints: [
+    "まず R1-Tokyo と R2-Osaka で `show ip interface brief` を実行し、どのインターフェースにIPが未設定・リンクダウン状態か確認しましょう。",
+    "R1-Tokyo の Gig0/1 は shutdown 状態です。`conf t` → `int g0/1` → `ip address 10.0.0.1 255.255.255.252` → `no shutdown` で対向 R2 (10.0.0.2/30) と同一サブネットにします。",
+    "L3通信は行きと帰りの両方のルートが必要です。R1 に `ip route 192.168.20.0 255.255.255.0 10.0.0.2`、R2 に `ip route 192.168.10.0 255.255.255.0 10.0.0.1` を設定して PC-Tokyo から `ping 192.168.20.10` を試してください。",
+  ],
+  solutionCommands: [
+    {
+      deviceId: "r1",
+      hostname: "R1-Tokyo",
+      commands: [
+        "enable",
+        "configure terminal",
+        "interface Gig0/1",
+        "ip address 10.0.0.1 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "ip route 192.168.20.0 255.255.255.0 10.0.0.2",
+        "end",
+      ],
+    },
+    {
+      deviceId: "r2",
+      hostname: "R2-Osaka",
+      commands: [
+        "enable",
+        "configure terminal",
+        "ip route 192.168.10.0 255.255.255.0 10.0.0.1",
+        "end",
+      ],
+    },
+  ],
+  solutionExplanation:
+    "ルータ間WANリンク (10.0.0.0/30) のR1側インターフェースを有効化・IP設定したうえで、各ルータが直接接続していないリモートLAN宛てのスタティックルートを行き(R1)・帰り(R2)の双方向に設定することで疎通が成立します。",
+};
