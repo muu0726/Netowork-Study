@@ -5,6 +5,8 @@ export * from "./link-utils";
 export * from "./acl-nat-dhcp";
 export * from "./routing-redundancy";
 export * from "./packet-simulator";
+export * from "./packet-headers";
+export * from "./state-diff";
 export * from "./cli-engine";
 export * from "./evaluator";
 export * from "./cloud-vpc";

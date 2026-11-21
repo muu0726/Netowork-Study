@@ -179,6 +179,7 @@ export function SubnetTool() {
                 </label>
                 <input
                   id="subnet-ip-input"
+                  name="subnetIpAddress"
                   type="text"
                   value={ipInput}
                   onChange={(e) => setIpInput(e.target.value)}
@@ -226,6 +227,7 @@ export function SubnetTool() {
 
                 <input
                   id="cidr-slider"
+                  name="cidrPrefix"
                   type="range"
                   min={0}
                   max={32}
@@ -407,24 +409,29 @@ export function SubnetTool() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              type="text"
-              value={answerInput}
-              disabled={submittedResult !== null}
-              onChange={(e) => setAnswerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !submittedResult) {
-                  handleCheckDrill();
+            <label htmlFor="subnet-drill-answer" className="block flex-1">
+              <span className="sr-only">サブネット問題の回答入力</span>
+              <input
+                id="subnet-drill-answer"
+                name="subnetDrillAnswer"
+                type="text"
+                value={answerInput}
+                disabled={submittedResult !== null}
+                onChange={(e) => setAnswerInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !submittedResult) {
+                    handleCheckDrill();
+                  }
+                }}
+                placeholder={
+                  question.ask === "usableCount"
+                    ? "例: 62"
+                    : "例: 192.168.10.64"
                 }
-              }}
-              placeholder={
-                question.ask === "usableCount"
-                  ? "例: 62"
-                  : "例: 192.168.10.64"
-              }
-              aria-label="サブネット問題の回答入力"
-              className="flex-1 rounded-lg border border-slate-700 bg-[#05080f] px-4 py-2.5 font-mono text-sm text-slate-100 focus:border-cyan-500 focus:outline-none disabled:opacity-70"
-            />
+                aria-label="サブネット問題の回答入力"
+                className="w-full rounded-lg border border-slate-700 bg-[#05080f] px-4 py-2.5 font-mono text-sm text-slate-100 focus:border-cyan-500 focus:outline-none disabled:opacity-70"
+              />
+            </label>
             {submittedResult === null ? (
               <button
                 type="button"

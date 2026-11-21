@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Trash2,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -593,10 +594,15 @@ function CloudScenarioSession({
             {activeTab === "route-tables" && activeRt && (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label
+                    htmlFor="vpc-rt-select"
+                    className="text-xs font-semibold text-slate-300"
+                  >
                     ルートテーブル選択:
                   </label>
                   <select
+                    id="vpc-rt-select"
+                    name="routeTableId"
                     value={selectedRtId}
                     onChange={(e) => setSelectedRtId(e.target.value)}
                     className="rounded-md border border-slate-700 bg-[#080d19] px-2.5 py-1.5 font-mono text-xs text-slate-100"
@@ -656,26 +662,34 @@ function CloudScenarioSession({
                 </div>
 
                 <div className="grid gap-2 rounded-lg border border-slate-800 bg-[#080d19] p-3 sm:grid-cols-3">
-                  <input
-                    type="text"
-                    value={rtCidr}
-                    onChange={(e) => setRtCidr(e.target.value)}
-                    placeholder="0.0.0.0/0"
-                    aria-label="Destination CIDR"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2.5 py-1.5 font-mono text-xs text-slate-100"
-                  />
-                  <select
-                    value={rtTargetChoice}
-                    onChange={(e) => setRtTargetChoice(e.target.value)}
-                    aria-label="Route Target"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2.5 py-1.5 font-mono text-xs text-slate-100"
-                  >
-                    {availableTargets.map((t) => (
-                      <option key={t.id} value={`${t.type}:${t.id}`}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
+                  <label htmlFor="vpc-rt-cidr" className="block">
+                    <span className="sr-only">Destination CIDR</span>
+                    <input
+                      id="vpc-rt-cidr"
+                      name="routeDestinationCidr"
+                      type="text"
+                      value={rtCidr}
+                      onChange={(e) => setRtCidr(e.target.value)}
+                      placeholder="0.0.0.0/0"
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2.5 py-1.5 font-mono text-xs text-slate-100"
+                    />
+                  </label>
+                  <label htmlFor="vpc-rt-target" className="block">
+                    <span className="sr-only">Route Target</span>
+                    <select
+                      id="vpc-rt-target"
+                      name="routeTarget"
+                      value={rtTargetChoice}
+                      onChange={(e) => setRtTargetChoice(e.target.value)}
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2.5 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      {availableTargets.map((t) => (
+                        <option key={t.id} value={`${t.type}:${t.id}`}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     type="button"
                     onClick={handleAddRoute}
@@ -697,10 +711,15 @@ function CloudScenarioSession({
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label
+                    htmlFor="vpc-sg-select"
+                    className="text-xs font-semibold text-slate-300"
+                  >
                     Security Group:
                   </label>
                   <select
+                    id="vpc-sg-select"
+                    name="securityGroupId"
                     value={selectedSgId}
                     onChange={(e) => setSelectedSgId(e.target.value)}
                     className="rounded-md border border-slate-700 bg-[#080d19] px-2.5 py-1.5 font-mono text-xs text-slate-100"
@@ -785,41 +804,61 @@ function CloudScenarioSession({
                 })}
 
                 <div className="grid gap-2 rounded-lg border border-slate-800 bg-[#080d19] p-3 sm:grid-cols-5">
-                  <select
-                    value={sgDirection}
-                    onChange={(e) =>
-                      setSgDirection(e.target.value as VpcRuleDirection)
-                    }
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  >
-                    <option value="inbound">Inbound</option>
-                    <option value="outbound">Outbound</option>
-                  </select>
-                  <select
-                    value={sgProto}
-                    onChange={(e) => setSgProto(e.target.value as VpcProtocol)}
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  >
-                    <option value="tcp">TCP</option>
-                    <option value="udp">UDP</option>
-                    <option value="icmp">ICMP</option>
-                    <option value="all">ALL</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={sgPortRange}
-                    onChange={(e) => setSgPortRange(e.target.value)}
-                    placeholder="443"
-                    disabled={sgProto === "icmp" || sgProto === "all"}
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100 disabled:opacity-40"
-                  />
-                  <input
-                    type="text"
-                    value={sgCidr}
-                    onChange={(e) => setSgCidr(e.target.value)}
-                    placeholder="0.0.0.0/0"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  />
+                  <label htmlFor="vpc-sg-direction" className="block">
+                    <span className="sr-only">Security Group Direction</span>
+                    <select
+                      id="vpc-sg-direction"
+                      name="sgDirection"
+                      value={sgDirection}
+                      onChange={(e) =>
+                        setSgDirection(e.target.value as VpcRuleDirection)
+                      }
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      <option value="inbound">Inbound</option>
+                      <option value="outbound">Outbound</option>
+                    </select>
+                  </label>
+                  <label htmlFor="vpc-sg-protocol" className="block">
+                    <span className="sr-only">Security Group Protocol</span>
+                    <select
+                      id="vpc-sg-protocol"
+                      name="sgProtocol"
+                      value={sgProto}
+                      onChange={(e) => setSgProto(e.target.value as VpcProtocol)}
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                      <option value="icmp">ICMP</option>
+                      <option value="all">ALL</option>
+                    </select>
+                  </label>
+                  <label htmlFor="vpc-sg-port" className="block">
+                    <span className="sr-only">Security Group Port Range</span>
+                    <input
+                      id="vpc-sg-port"
+                      name="sgPortRange"
+                      type="text"
+                      value={sgPortRange}
+                      onChange={(e) => setSgPortRange(e.target.value)}
+                      placeholder="443"
+                      disabled={sgProto === "icmp" || sgProto === "all"}
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100 disabled:opacity-40"
+                    />
+                  </label>
+                  <label htmlFor="vpc-sg-cidr" className="block">
+                    <span className="sr-only">Security Group CIDR</span>
+                    <input
+                      id="vpc-sg-cidr"
+                      name="sgCidr"
+                      type="text"
+                      value={sgCidr}
+                      onChange={(e) => setSgCidr(e.target.value)}
+                      placeholder="0.0.0.0/0"
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    />
+                  </label>
                   <button
                     type="button"
                     onClick={handleAddSgRule}
@@ -841,10 +880,15 @@ function CloudScenarioSession({
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label
+                    htmlFor="vpc-nacl-select"
+                    className="text-xs font-semibold text-slate-300"
+                  >
                     Network ACL:
                   </label>
                   <select
+                    id="vpc-nacl-select"
+                    name="naclId"
                     value={selectedNaclId}
                     onChange={(e) => setSelectedNaclId(e.target.value)}
                     className="rounded-md border border-slate-700 bg-[#080d19] px-2.5 py-1.5 font-mono text-xs text-slate-100"
@@ -940,65 +984,92 @@ function CloudScenarioSession({
                 })}
 
                 <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-800 bg-[#080d19] p-3 sm:grid-cols-4">
-                  <input
-                    type="text"
-                    value={naclRuleNum}
-                    onChange={(e) => setNaclRuleNum(e.target.value)}
-                    placeholder="Rule#"
-                    aria-label="NACL Rule Number"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  />
-                  <select
-                    value={naclDirection}
-                    onChange={(e) =>
-                      setNaclDirection(e.target.value as VpcRuleDirection)
-                    }
-                    aria-label="NACL Direction"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                  <label htmlFor="vpc-nacl-rule-num" className="block">
+                    <span className="sr-only">NACL Rule Number</span>
+                    <input
+                      id="vpc-nacl-rule-num"
+                      name="naclRuleNumber"
+                      type="text"
+                      value={naclRuleNum}
+                      onChange={(e) => setNaclRuleNum(e.target.value)}
+                      placeholder="Rule#"
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    />
+                  </label>
+                  <label htmlFor="vpc-nacl-direction" className="block">
+                    <span className="sr-only">NACL Direction</span>
+                    <select
+                      id="vpc-nacl-direction"
+                      name="naclDirection"
+                      value={naclDirection}
+                      onChange={(e) =>
+                        setNaclDirection(e.target.value as VpcRuleDirection)
+                      }
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      <option value="inbound">In</option>
+                      <option value="outbound">Out</option>
+                    </select>
+                  </label>
+                  <label htmlFor="vpc-nacl-protocol" className="block">
+                    <span className="sr-only">NACL Protocol</span>
+                    <select
+                      id="vpc-nacl-protocol"
+                      name="naclProtocol"
+                      value={naclProto}
+                      onChange={(e) =>
+                        setNaclProto(e.target.value as VpcProtocol)
+                      }
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                      <option value="all">ALL</option>
+                    </select>
+                  </label>
+                  <label htmlFor="vpc-nacl-port" className="block">
+                    <span className="sr-only">NACL Port Range</span>
+                    <input
+                      id="vpc-nacl-port"
+                      name="naclPortRange"
+                      type="text"
+                      value={naclPortRange}
+                      onChange={(e) => setNaclPortRange(e.target.value)}
+                      placeholder="1024-65535"
+                      disabled={naclProto === "all"}
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100 disabled:opacity-40"
+                    />
+                  </label>
+                  <label
+                    htmlFor="vpc-nacl-cidr"
+                    className="col-span-1 block sm:col-span-2"
                   >
-                    <option value="inbound">In</option>
-                    <option value="outbound">Out</option>
-                  </select>
-                  <select
-                    value={naclProto}
-                    onChange={(e) =>
-                      setNaclProto(e.target.value as VpcProtocol)
-                    }
-                    aria-label="NACL Protocol"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  >
-                    <option value="tcp">TCP</option>
-                    <option value="udp">UDP</option>
-                    <option value="all">ALL</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={naclPortRange}
-                    onChange={(e) => setNaclPortRange(e.target.value)}
-                    placeholder="1024-65535"
-                    aria-label="NACL Port Range"
-                    disabled={naclProto === "all"}
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100 disabled:opacity-40"
-                  />
-                  <input
-                    type="text"
-                    value={naclCidr}
-                    onChange={(e) => setNaclCidr(e.target.value)}
-                    placeholder="0.0.0.0/0"
-                    aria-label="NACL CIDR"
-                    className="col-span-1 rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100 sm:col-span-2"
-                  />
-                  <select
-                    value={naclAction}
-                    onChange={(e) =>
-                      setNaclAction(e.target.value as "ALLOW" | "DENY")
-                    }
-                    aria-label="NACL Action"
-                    className="rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
-                  >
-                    <option value="ALLOW">ALLOW</option>
-                    <option value="DENY">DENY</option>
-                  </select>
+                    <span className="sr-only">NACL CIDR</span>
+                    <input
+                      id="vpc-nacl-cidr"
+                      name="naclCidr"
+                      type="text"
+                      value={naclCidr}
+                      onChange={(e) => setNaclCidr(e.target.value)}
+                      placeholder="0.0.0.0/0"
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    />
+                  </label>
+                  <label htmlFor="vpc-nacl-action" className="block">
+                    <span className="sr-only">NACL Action</span>
+                    <select
+                      id="vpc-nacl-action"
+                      name="naclAction"
+                      value={naclAction}
+                      onChange={(e) =>
+                        setNaclAction(e.target.value as "ALLOW" | "DENY")
+                      }
+                      className="w-full rounded border border-slate-700 bg-[#05080f] px-2 py-1.5 font-mono text-xs text-slate-100"
+                    >
+                      <option value="ALLOW">ALLOW</option>
+                      <option value="DENY">DENY</option>
+                    </select>
+                  </label>
                   <button
                     type="button"
                     onClick={handleAddNaclRule}
@@ -1099,7 +1170,13 @@ function CloudScenarioSession({
   );
 }
 
-export function CloudVpcWorkspace({ scenarios }: CloudVpcWorkspaceProps) {
+function CloudVpcWorkspaceInner({
+  scenarios,
+  initialScenarioId,
+}: {
+  scenarios: CloudVpcScenarioDefinition[];
+  initialScenarioId: string;
+}) {
   const hydrated = useHydrated();
   const completedScenarioIds = useLearningStore(
     (state) => state.completedScenarioIds,
@@ -1108,7 +1185,7 @@ export function CloudVpcWorkspace({ scenarios }: CloudVpcWorkspaceProps) {
     (state) => state.markScenarioCompleted,
   );
 
-  const [activeId, setActiveId] = useState<string>(scenarios[0]?.id ?? "");
+  const [activeId, setActiveId] = useState<string>(initialScenarioId);
   const activeScenario =
     scenarios.find((s) => s.id === activeId) ?? scenarios[0];
 
@@ -1157,5 +1234,22 @@ export function CloudVpcWorkspace({ scenarios }: CloudVpcWorkspaceProps) {
         onCompleted={markScenarioCompleted}
       />
     </div>
+  );
+}
+
+export function CloudVpcWorkspace({ scenarios }: CloudVpcWorkspaceProps) {
+  const searchParams = useSearchParams();
+  const scenarioParam = searchParams.get("scenario");
+  const matched =
+    scenarioParam && scenarios.some((s) => s.id === scenarioParam)
+      ? scenarioParam
+      : (scenarios[0]?.id ?? "");
+
+  return (
+    <CloudVpcWorkspaceInner
+      key={scenarioParam ?? "default"}
+      scenarios={scenarios}
+      initialScenarioId={matched}
+    />
   );
 }

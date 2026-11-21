@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useLearningStore } from "./useLearningStore";
+import {
+  parseLearningProgressBackup,
+  serializeLearningProgress,
+  useLearningStore,
+} from "./useLearningStore";
 
 describe("useLearningStore", () => {
   beforeEach(() => {
@@ -94,5 +98,60 @@ describe("useLearningStore", () => {
     expect(next.quizScores).toEqual({});
     expect(next.drillStats).toEqual({});
     expect(next.lastVisitedPath).toBeNull();
+  });
+
+  it("serializes, validates, and imports JSON progress backups safely", () => {
+    const raw = serializeLearningProgress({
+      completedLessonIds: ["stage1/lan-wan", "stage1/lan-wan", "stage2/acl-security"],
+      completedScenarioIds: ["cli-basic-routing"],
+      quizScores: {
+        "stage1/lan-wan": {
+          score: 3,
+          total: 3,
+          bestScore: 3,
+          updatedAt: "2026-11-21T00:00:00.000Z",
+        },
+      },
+      drillStats: {
+        subnet: { solved: 4, attempted: 5, bestStreak: 3 },
+      },
+      diagnosticDomainScores: {
+        fundamentals: { correct: 2, total: 2 },
+      },
+      lastVisitedPath: "/tools",
+    });
+
+    const parsed = parseLearningProgressBackup(raw);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+    expect(parsed.data.completedLessonIds).toEqual([
+      "stage1/lan-wan",
+      "stage2/acl-security",
+    ]);
+    expect(parsed.summary).toEqual({
+      completedLessons: 2,
+      completedScenarios: 1,
+      quizCount: 1,
+      drillSolved: 4,
+    });
+
+    useLearningStore.getState().importProgress(parsed.data);
+    expect(useLearningStore.getState().completedLessonIds).toEqual([
+      "stage1/lan-wan",
+      "stage2/acl-security",
+    ]);
+    expect(useLearningStore.getState().drillStats.subnet.solved).toBe(4);
+
+    expect(parseLearningProgressBackup("{not-json").ok).toBe(false);
+    expect(
+      parseLearningProgressBackup(JSON.stringify({ version: 99, data: {} })).ok,
+    ).toBe(false);
+    expect(
+      parseLearningProgressBackup(
+        JSON.stringify({ version: 1, data: { completedLessonIds: [123] } }),
+      ).ok,
+    ).toBe(false);
   });
 });

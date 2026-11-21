@@ -171,6 +171,7 @@ export function Ipv6Tool() {
               </label>
               <input
                 id="ipv6-input"
+                name="ipv6Address"
                 type="text"
                 value={inputAddress}
                 onChange={(e) => setInputAddress(e.target.value)}
@@ -350,22 +351,27 @@ export function Ipv6Tool() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              value={convInput}
-              onChange={(e) => setConvInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleCheckConversion();
+            <label htmlFor="ipv6-drill-answer" className="block flex-1">
+              <span className="sr-only">IPv6変換ドリルの回答入力</span>
+              <input
+                id="ipv6-drill-answer"
+                name="ipv6DrillAnswer"
+                type="text"
+                value={convInput}
+                onChange={(e) => setConvInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCheckConversion();
+                  }
+                }}
+                placeholder={
+                  convMode === "compress"
+                    ? "例: 2001:db8::1"
+                    : "例: 2001:0db8:0000:..."
                 }
-              }}
-              placeholder={
-                convMode === "compress"
-                  ? "例: 2001:db8::1"
-                  : "例: 2001:0db8:0000:..."
-              }
-              className="flex-1 rounded-lg border border-slate-700 bg-[#05080f] px-3.5 py-2 font-mono text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
-            />
+                className="w-full rounded-lg border border-slate-700 bg-[#05080f] px-3.5 py-2 font-mono text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+              />
+            </label>
             <button
               type="button"
               onClick={handleCheckConversion}

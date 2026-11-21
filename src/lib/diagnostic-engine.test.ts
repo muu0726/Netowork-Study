@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CLOUD_SCENARIOS_META, LESSONS_META, SCENARIOS_META } from "@/data/curriculum-meta";
 import {
   buildDiagnosticQuestionBank,
+  buildStudyPrescription,
   computeDomainMastery,
   DIAGNOSTIC_DOMAINS,
   generateDiagnosticExam,
@@ -74,5 +75,36 @@ describe("Phase 8: Diagnostic Engine, Balanced Exam & Domain Mastery", () => {
     const ticket = pickRandomIncidentChallenge(3);
     expect(ticket.id.length).toBeGreaterThan(0);
     expect(["/labs/troubleshoot", "/labs/cloud"]).toContain(ticket.href);
+    expect(ticket.deepLinkHref).toContain(`${ticket.href}?scenario=`);
+  });
+
+  it("builds a 3-step targeted study prescription for the weakest domain", () => {
+    const prescription = buildStudyPrescription({
+      completedLessonIds: ["stage1/lan-wan", "stage1/osi-tcpip"],
+      completedScenarioIds: [],
+      quizScores: {},
+      drillStats: {},
+      diagnosticDomainScores: {
+        fundamentals: { correct: 2, total: 2 },
+        "l2-switching": { correct: 2, total: 2 },
+        "l3-routing": { correct: 2, total: 2 },
+        "acl-nat-dhcp": { correct: 0, total: 2 },
+        "linux-web": { correct: 2, total: 2 },
+        "cloud-netops": { correct: 2, total: 2 },
+      },
+      lastVisitedPath: null,
+    });
+
+    expect(prescription.targetDomain.domainId).toBe("acl-nat-dhcp");
+    expect(prescription.actions).toHaveLength(3);
+    expect(prescription.totalEstimatedMinutes).toBeGreaterThan(0);
+    expect(prescription.actions.map((a) => a.kind)).toEqual([
+      "lesson",
+      "scenario",
+      "tool",
+    ]);
+    expect(prescription.actions[0].href).toContain("/learn/");
+    expect(prescription.actions[1].href).toContain("?scenario=");
+    expect(prescription.actions[2].href).toContain("/tools?tab=");
   });
 });

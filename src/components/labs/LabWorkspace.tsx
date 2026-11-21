@@ -6,13 +6,20 @@ import {
   BookMarked,
   CheckCircle2,
   Circle,
+  GitCompare,
+  History,
   Lightbulb,
+  Pause,
+  Play,
+  Redo2,
   RotateCcw,
   ShieldAlert,
   Terminal,
   Trophy,
+  Undo2,
 } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { CheatSheetDrawer } from "@/components/labs/CheatSheetDrawer";
 import { CliTerminal, type TerminalLine } from "@/components/labs/CliTerminal";
 import { HintsPanel } from "@/components/labs/HintsPanel";
@@ -22,6 +29,7 @@ import { Card } from "@/components/ui/Card";
 import { useHydrated } from "@/hooks/useHydrated";
 import { cn } from "@/lib/cn";
 import {
+  computeNetworkConfigDiff,
   evaluateScenario,
   executeCommand,
   getDevicePrompt,
@@ -31,6 +39,14 @@ import {
   type ScenarioDefinition,
 } from "@/lib/network-engine";
 import { useLearningStore } from "@/store/useLearningStore";
+
+interface CommandSnapshot {
+  step: number;
+  state: NetworkState;
+  deviceId: string;
+  hostname: string;
+  commandLabel: string;
+}
 
 interface LabWorkspaceProps {
   category: "lab" | "troubleshoot";
@@ -100,9 +116,20 @@ function ScenarioSession({
   category,
   onCompleted,
 }: ScenarioSessionProps) {
-  const [networkState, setNetworkState] = useState<NetworkState>(() =>
-    structuredClone(scenario.initialState),
-  );
+  const [snapshots, setSnapshots] = useState<CommandSnapshot[]>(() => [
+    {
+      step: 0,
+      state: structuredClone(scenario.initialState),
+      deviceId: getDefaultDeviceId(scenario),
+      hostname: "初期状態",
+      commandLabel: "Initial Topology",
+    },
+  ]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [diffOnlyChanged, setDiffOnlyChanged] = useState(true);
+
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() =>
     getDefaultDeviceId(scenario),
   );
@@ -131,15 +158,83 @@ function ScenarioSession({
   );
   const [lineSeq, setLineSeq] = useState(0);
 
+  const activeSnapshot = snapshots[currentStepIndex] ?? snapshots[0];
+  const networkState = activeSnapshot.state;
+
+  useEffect(() => {
+    if (!isReplaying) {
+      return;
+    }
+    if (currentStepIndex >= snapshots.length - 1) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const next = currentStepIndex + 1;
+      setCurrentStepIndex(next);
+      if (next >= snapshots.length - 1) {
+        setIsReplaying(false);
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [isReplaying, currentStepIndex, snapshots.length]);
+
   const selectedDevice =
     networkState.devices[selectedDeviceId] ??
     Object.values(networkState.devices)[0];
 
   const evaluation = evaluateScenario(networkState, scenario);
+  const configDiff = computeNetworkConfigDiff(
+    scenario.initialState,
+    networkState,
+  );
+
+  const canUndo = currentStepIndex > 0 && !isReplaying;
+  const canRedo = currentStepIndex < snapshots.length - 1 && !isReplaying;
+
+  const handleUndo = () => {
+    if (!canUndo) {
+      return;
+    }
+    setIsReplaying(false);
+    setCurrentStepIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleRedo = () => {
+    if (!canRedo) {
+      return;
+    }
+    setIsReplaying(false);
+    setCurrentStepIndex((prev) => Math.min(snapshots.length - 1, prev + 1));
+  };
+
+  const handleToggleReplay = () => {
+    if (snapshots.length <= 1) {
+      return;
+    }
+    if (isReplaying) {
+      setIsReplaying(false);
+      return;
+    }
+    if (currentStepIndex >= snapshots.length - 1) {
+      setCurrentStepIndex(0);
+    }
+    setIsReplaying(true);
+  };
 
   const handleReset = () => {
     const fresh = structuredClone(scenario.initialState);
-    setNetworkState(fresh);
+    setIsReplaying(false);
+    setSnapshots([
+      {
+        step: 0,
+        state: fresh,
+        deviceId: getDefaultDeviceId(scenario),
+        hostname: "初期状態",
+        commandLabel: "Initial Topology",
+      },
+    ]);
+    setCurrentStepIndex(0);
+    setShowDiffPanel(false);
     setSelectedDeviceId(getDefaultDeviceId(scenario));
     const initLogs: Record<string, TerminalLine[]> = {};
     for (const dev of Object.values(fresh.devices)) {
@@ -202,7 +297,24 @@ function ScenarioSession({
     }
 
     setLineSeq(baseSeq + 10);
-    setNetworkState(result.nextState);
+    setIsReplaying(false);
+
+    if (trimmed.length > 0) {
+      const baseSnapshots = snapshots.slice(0, currentStepIndex + 1);
+      const nextStepIdx = baseSnapshots.length;
+      setSnapshots([
+        ...baseSnapshots,
+        {
+          step: nextStepIdx,
+          state: result.nextState,
+          deviceId: selectedDevice.id,
+          hostname: selectedDevice.hostname,
+          commandLabel: trimmed,
+        },
+      ]);
+      setCurrentStepIndex(nextStepIdx);
+    }
+
     setLogsByDevice((prev) => ({
       ...prev,
       [selectedDevice.id]: [...(prev[selectedDevice.id] ?? []), ...appended],
@@ -271,6 +383,44 @@ function ScenarioSession({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={!canUndo}
+              title="直前の操作を1手戻す (Undo)"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-[#070b14] px-2.5 py-2 text-xs font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              <span>1手戻す</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRedo}
+              disabled={!canRedo}
+              title="戻した操作をやり直す (Redo)"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-[#070b14] px-2.5 py-2 text-xs font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+              <span>やり直す</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDiffPanel((prev) => !prev)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                showDiffPanel
+                  ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-200"
+                  : "border-slate-700 bg-[#070b14] text-slate-200 hover:border-emerald-500/50 hover:text-emerald-200",
+              )}
+            >
+              <GitCompare className="h-3.5 w-3.5 text-emerald-400" />
+              <span>
+                設定Diff (+{configDiff.totalAdded}/-{configDiff.totalRemoved})
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowHints((prev) => !prev)}
@@ -346,6 +496,155 @@ function ScenarioSession({
         </div>
       </Card>
 
+      {/* Timeline & Operation Replay Strip */}
+      {snapshots.length > 1 && (
+        <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-cyan-400" />
+            <span className="font-mono text-xs font-semibold text-slate-200">
+              タイムライン
+            </span>
+            <Badge variant="cyan">
+              Step {currentStepIndex} / {snapshots.length - 1}
+            </Badge>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleToggleReplay}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors",
+              isReplaying
+                ? "border-amber-500/60 bg-amber-500/15 text-amber-200"
+                : "border-cyan-500/50 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20",
+            )}
+          >
+            {isReplaying ? (
+              <>
+                <Pause className="h-3 w-3" />
+                <span>停止</span>
+              </>
+            ) : (
+              <>
+                <Play className="h-3 w-3" />
+                <span>手順リプレイ</span>
+              </>
+            )}
+          </button>
+
+          <label htmlFor="lab-timeline-slider" className="sr-only">
+            コマンド操作タイムラインスライダー
+          </label>
+          <input
+            id="lab-timeline-slider"
+            name="labTimelineStep"
+            type="range"
+            min={0}
+            max={snapshots.length - 1}
+            value={currentStepIndex}
+            onChange={(e) => {
+              setIsReplaying(false);
+              setCurrentStepIndex(Number(e.target.value));
+            }}
+            className="min-w-[140px] flex-1 accent-cyan-400"
+          />
+
+          <span className="max-w-full truncate font-mono text-[11px] text-slate-300">
+            [{activeSnapshot.hostname}] {activeSnapshot.commandLabel}
+          </span>
+        </Card>
+      )}
+
+      {/* Realtime Config Diff Panel */}
+      {showDiffPanel && (
+        <Card className="space-y-3 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <GitCompare className="h-4 w-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-slate-100">
+                初期状態からのリアルタイム設定 Diff
+              </h3>
+              <Badge variant="emerald">+{configDiff.totalAdded}</Badge>
+              <Badge variant="rose">-{configDiff.totalRemoved}</Badge>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDiffOnlyChanged((prev) => !prev)}
+                className="rounded-md border border-slate-700 bg-[#070b14] px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:border-cyan-500/50"
+              >
+                {diffOnlyChanged ? "変更箇所のみ表示中" : "全設定ライン表示中"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDiffPanel(false)}
+                className="rounded-md border border-slate-800 bg-[#070b14] px-2.5 py-1 text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+
+          {configDiff.changedDeviceCount === 0 && diffOnlyChanged ? (
+            <p className="rounded-lg border border-slate-800 bg-[#05080f] px-3.5 py-3 font-mono text-xs text-slate-400">
+              初期状態からの設定変更はまだありません（CLIで設定を変更するとここに + / - の差分が表示されます）。
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {configDiff.devices
+                .filter((d) => !diffOnlyChanged || d.hasChanges)
+                .map((dev) => {
+                  const visibleLines = diffOnlyChanged
+                    ? dev.lines.filter((l) => l.type !== "unchanged")
+                    : dev.lines;
+                  return (
+                    <div
+                      key={dev.deviceId}
+                      className="rounded-xl border border-slate-800 bg-[#05080f] p-3"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
+                        <span className="font-mono text-xs font-bold text-cyan-300">
+                          {dev.hostname}
+                        </span>
+                        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                          <span className="text-emerald-400">
+                            +{dev.addedCount}
+                          </span>
+                          <span className="text-rose-400">
+                            -{dev.removedCount}
+                          </span>
+                        </div>
+                      </div>
+                      <pre className="terminal-scroll max-h-48 overflow-auto font-mono text-[11px] leading-relaxed">
+                        {visibleLines.map((dl, lineIdx) => (
+                          <div
+                            key={`${dev.deviceId}-${lineIdx}-${dl.line}`}
+                            className={cn(
+                              "px-1.5",
+                              dl.type === "added" &&
+                                "bg-emerald-500/15 text-emerald-300",
+                              dl.type === "removed" &&
+                                "bg-rose-500/15 text-rose-300",
+                              dl.type === "unchanged" && "text-slate-400",
+                            )}
+                          >
+                            {dl.type === "added"
+                              ? `+ ${dl.line}`
+                              : dl.type === "removed"
+                                ? `- ${dl.line}`
+                                : `  ${dl.line}`}
+                          </div>
+                        ))}
+                      </pre>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Progressive 3-Stage Hints */}
       {showHints && (
         <HintsPanel
@@ -365,18 +664,31 @@ function ScenarioSession({
           transition={{ duration: 0.35 }}
           className="rounded-xl border border-emerald-500/50 bg-gradient-to-br from-emerald-500/15 via-[#0d1322] to-cyan-500/10 p-5 shadow-lg shadow-emerald-950/30"
         >
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-400/40 bg-emerald-500/20 text-emerald-300">
-              <Trophy className="h-5 w-5" />
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-400/40 bg-emerald-500/20 text-emerald-300">
+                <Trophy className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-emerald-200">
+                  全ゴール達成！シナリオクリア
+                </h3>
+                <p className="text-xs text-slate-300">
+                  最短の切り分け手順と模範コンフィグ解説を確認できます。
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-emerald-200">
-                全ゴール達成！シナリオクリア
-              </h3>
-              <p className="text-xs text-slate-300">
-                最短の切り分け手順と模範コンフィグ解説を確認できます。
-              </p>
-            </div>
+
+            {snapshots.length > 1 && (
+              <button
+                type="button"
+                onClick={handleToggleReplay}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30"
+              >
+                <Play className="h-3.5 w-3.5" />
+                <span>自分の復旧手順をリプレイ再生</span>
+              </button>
+            )}
           </div>
 
           <p className="mt-3 text-sm leading-relaxed text-slate-200">
@@ -457,6 +769,8 @@ function ScenarioSession({
           <CliTerminal
             device={selectedDevice}
             networkState={networkState}
+            devices={Object.values(networkState.devices)}
+            onSelectDevice={handleSelectDevice}
             lines={logsByDevice[selectedDevice.id] ?? []}
             commandHistory={historyByDevice[selectedDevice.id] ?? []}
             inputValue={commandInput}
@@ -480,9 +794,13 @@ function ScenarioSession({
   );
 }
 
-export function LabWorkspace({ category, scenarios }: LabWorkspaceProps) {
+function LabWorkspaceInner({
+  category,
+  scenarios,
+  initialScenarioId,
+}: LabWorkspaceProps & { initialScenarioId: string }) {
   const [activeScenarioId, setActiveScenarioId] = useState<string>(
-    scenarios[0]?.id ?? "",
+    initialScenarioId,
   );
   const hydrated = useHydrated();
   const completedScenarioIds = useLearningStore(
@@ -526,7 +844,7 @@ export function LabWorkspace({ category, scenarios }: LabWorkspaceProps) {
                 type="button"
                 onClick={() => setActiveScenarioId(scenario.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl border px-3.5 py-2 text-left text-xs font-medium transition-colors",
+                  "scroll-mt-20 flex items-center gap-2 rounded-xl border px-3.5 py-2 text-left text-xs font-medium transition-colors",
                   isActive
                     ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-100 shadow-sm shadow-cyan-950/50"
                     : "border-slate-800 bg-[#0d1322] text-slate-300 hover:border-slate-700 hover:text-white",
@@ -554,5 +872,23 @@ export function LabWorkspace({ category, scenarios }: LabWorkspaceProps) {
         onCompleted={markScenarioCompleted}
       />
     </div>
+  );
+}
+
+export function LabWorkspace({ category, scenarios }: LabWorkspaceProps) {
+  const searchParams = useSearchParams();
+  const scenarioParam = searchParams.get("scenario");
+  const matched =
+    scenarioParam && scenarios.some((s) => s.id === scenarioParam)
+      ? scenarioParam
+      : (scenarios[0]?.id ?? "");
+
+  return (
+    <LabWorkspaceInner
+      key={scenarioParam ?? "default"}
+      category={category}
+      scenarios={scenarios}
+      initialScenarioId={matched}
+    />
   );
 }

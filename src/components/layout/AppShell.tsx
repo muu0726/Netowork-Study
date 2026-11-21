@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -11,6 +12,18 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalShortcut);
+    return () => window.removeEventListener("keydown", handleGlobalShortcut);
+  }, []);
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -64,9 +77,17 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header onOpenMobileMenu={() => setMobileMenuOpen(true)} />
+        <Header
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onOpenSearch={() => setCommandPaletteOpen(true)}
+        />
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
     </div>
   );
 }

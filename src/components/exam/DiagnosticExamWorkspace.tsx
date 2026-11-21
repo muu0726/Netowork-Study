@@ -18,6 +18,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { cn } from "@/lib/cn";
 import {
   buildDiagnosticQuestionBank,
+  buildStudyPrescription,
   DIAGNOSTIC_DOMAINS,
   generateDiagnosticExam,
   pickRandomIncidentChallenge,
@@ -36,6 +37,18 @@ function ExamSession({
   const recordDiagnosticResult = useLearningStore(
     (state) => state.recordDiagnosticResult,
   );
+  const completedLessonIds = useLearningStore(
+    (state) => state.completedLessonIds,
+  );
+  const completedScenarioIds = useLearningStore(
+    (state) => state.completedScenarioIds,
+  );
+  const quizScores = useLearningStore((state) => state.quizScores);
+  const drillStats = useLearningStore((state) => state.drillStats);
+  const diagnosticDomainScores = useLearningStore(
+    (state) => state.diagnosticDomainScores,
+  );
+  const lastVisitedPath = useLearningStore((state) => state.lastVisitedPath);
 
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -74,6 +87,17 @@ function ExamSession({
   ).length;
   const scorePct =
     totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+  const prescription = submitted
+    ? buildStudyPrescription({
+        completedLessonIds,
+        completedScenarioIds,
+        quizScores,
+        drillStats,
+        diagnosticDomainScores,
+        lastVisitedPath,
+      })
+    : null;
 
   return (
     <div className="space-y-5">
@@ -186,6 +210,35 @@ function ExamSession({
               );
             })}
           </div>
+
+          {prescription && (
+            <div className="space-y-2.5 rounded-xl border border-amber-500/35 bg-[#080d19]/90 p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-amber-200">
+                  診断結果に基づく推奨復習ルート（{prescription.targetDomain.label}）
+                </span>
+                <span className="font-mono text-[11px] text-slate-400">
+                  所要目安: 約{prescription.totalEstimatedMinutes}分
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {prescription.actions.map((act) => (
+                  <Link
+                    key={`${act.kind}-${act.href}`}
+                    href={act.href}
+                    className="group rounded-lg border border-slate-800 bg-[#05080f] p-2.5 text-xs transition-colors hover:border-cyan-500/50"
+                  >
+                    <p className="font-mono text-[10px] text-cyan-300">
+                      {act.badge}
+                    </p>
+                    <p className="mt-1 line-clamp-1 font-bold text-slate-100 group-hover:text-cyan-200">
+                      {act.title}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
@@ -360,7 +413,7 @@ export function DiagnosticExamWorkspace() {
           </p>
           <div className="mt-3 flex justify-end">
             <Link
-              href={challenge.href}
+              href={challenge.deepLinkHref}
               className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-rose-400"
             >
               <span>実機シミュレータで調査を開始</span>

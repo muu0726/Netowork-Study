@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Menu, Terminal } from "lucide-react";
+import { ChevronRight, Menu, Search, Terminal } from "lucide-react";
 
 interface RouteTitleMeta {
   title: string;
@@ -36,9 +36,10 @@ function getRouteMeta(pathname: string): RouteTitleMeta {
 
 interface HeaderProps {
   onOpenMobileMenu: () => void;
+  onOpenSearch?: () => void;
 }
 
-export function Header({ onOpenMobileMenu }: HeaderProps) {
+export function Header({ onOpenMobileMenu, onOpenSearch }: HeaderProps) {
   const pathname = usePathname();
   const routeMeta = getRouteMeta(pathname);
 
@@ -66,6 +67,21 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2.5">
+        {onOpenSearch && (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            aria-label="グローバル検索を開く (Cmd+K)"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0d1322] px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-cyan-500/50 hover:text-cyan-200"
+          >
+            <Search className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">検索</span>
+            <kbd className="hidden rounded border border-slate-700 bg-[#05080f] px-1.5 py-0.5 font-mono text-[10px] text-slate-400 sm:inline">
+              ⌘K
+            </kbd>
+          </button>
+        )}
+
         <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-300 sm:inline-flex">
           <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
           Virtual Net Engine

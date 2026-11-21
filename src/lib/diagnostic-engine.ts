@@ -1,6 +1,8 @@
 import {
   CLOUD_SCENARIOS_META,
+  LESSONS_META,
   SCENARIOS_META,
+  TOOLS_META,
 } from "@/data/curriculum-meta";
 import { ALL_LESSONS } from "@/data/lessons";
 import { TROUBLESHOOT_SCENARIOS } from "@/data/scenarios";
@@ -225,6 +227,7 @@ export interface IncidentChallengeItem {
   category: "ios-linux" | "cloud";
   categoryLabel: string;
   href: string;
+  deepLinkHref: string;
   symptom: string;
 }
 
@@ -236,6 +239,7 @@ export function listAllIncidentChallenges(): IncidentChallengeItem[] {
     category: "ios-linux",
     categoryLabel: "Cisco IOS / Linux 障害対応",
     href: "/labs/troubleshoot",
+    deepLinkHref: `/labs/troubleshoot?scenario=${encodeURIComponent(s.id)}`,
     symptom: s.ticketSymptom ?? s.description,
   }));
   const cloud: IncidentChallengeItem[] = CLOUD_VPC_SCENARIOS.map((s) => ({
@@ -245,6 +249,7 @@ export function listAllIncidentChallenges(): IncidentChallengeItem[] {
     category: "cloud",
     categoryLabel: "AWS VPC クラウド障害",
     href: "/labs/cloud",
+    deepLinkHref: `/labs/cloud?scenario=${encodeURIComponent(s.id)}`,
     symptom: s.ticketSymptom,
   }));
   return [...iosLinux, ...cloud];
@@ -376,5 +381,173 @@ export function computeDomainMastery(
     weakestDomain,
     totalCatalogItems:
       ALL_LESSONS.length + SCENARIOS_META.length + CLOUD_SCENARIOS_META.length,
+  };
+}
+
+export interface PrescriptionActionItem {
+  kind: "lesson" | "scenario" | "tool";
+  badge: string;
+  title: string;
+  reason: string;
+  href: string;
+  estimatedMinutes: number;
+  completed: boolean;
+}
+
+export interface StudyPrescription {
+  targetDomain: DomainMasteryItem;
+  totalEstimatedMinutes: number;
+  summary: string;
+  actions: PrescriptionActionItem[];
+}
+
+function buildScenarioAction(
+  scenarioId: string,
+  completedScenarioIds: readonly string[],
+  reason: string,
+): PrescriptionActionItem | null {
+  const std = SCENARIOS_META.find((s) => s.id === scenarioId);
+  if (std) {
+    const isLab = std.category === "lab";
+    return {
+      kind: "scenario",
+      badge: isLab ? "CLI LAB" : "障害チケット",
+      title: std.title,
+      reason,
+      href: isLab
+        ? `/labs/cli?scenario=${encodeURIComponent(std.id)}`
+        : `/labs/troubleshoot?scenario=${encodeURIComponent(std.id)}`,
+      estimatedMinutes: 12,
+      completed: completedScenarioIds.includes(std.id),
+    };
+  }
+
+  const cloud = CLOUD_SCENARIOS_META.find((c) => c.id === scenarioId);
+  if (cloud) {
+    return {
+      kind: "scenario",
+      badge: "AWS VPC",
+      title: cloud.title,
+      reason,
+      href: `/labs/cloud?scenario=${encodeURIComponent(cloud.id)}`,
+      estimatedMinutes: 12,
+      completed: completedScenarioIds.includes(cloud.id),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 6領域習熟度レーダーの最弱分野に基づき、「記事・実技ラボ・ツール演習」の今日の復習処方箋を生成します。
+ */
+export function buildStudyPrescription(
+  persisted: PersistedLearningState,
+): StudyPrescription {
+  const mastery = computeDomainMastery(persisted);
+  const targetDomain = mastery.weakestDomain;
+  const domainMeta =
+    DIAGNOSTIC_DOMAINS.find((d) => d.id === targetDomain.domainId) ??
+    DIAGNOSTIC_DOMAINS[0];
+
+  const actions: PrescriptionActionItem[] = [];
+
+  // 1. Recommended Lesson in target domain
+  const lessonCandidates = domainMeta.lessonIds
+    .map((id) => LESSONS_META.find((l) => l.id === id))
+    .filter((l): l is NonNullable<typeof l> => Boolean(l));
+
+  const pickedLesson =
+    lessonCandidates.find(
+      (l) => !persisted.completedLessonIds.includes(l.id),
+    ) ??
+    [...lessonCandidates].sort((a, b) => {
+      const qa = persisted.quizScores[a.id];
+      const qb = persisted.quizScores[b.id];
+      const ra = qa && qa.total > 0 ? qa.bestScore / qa.total : 1;
+      const rb = qb && qb.total > 0 ? qb.bestScore / qb.total : 1;
+      return ra - rb;
+    })[0];
+
+  if (pickedLesson) {
+    const lessonDone = persisted.completedLessonIds.includes(pickedLesson.id);
+    actions.push({
+      kind: "lesson",
+      badge: `${pickedLesson.stage.toUpperCase()} 記事`,
+      title: pickedLesson.title,
+      reason: lessonDone
+        ? "確認クイズの理解度定着のため再チェックしましょう。"
+        : `${targetDomain.label} の未修了単元を基礎から補強します。`,
+      href: `/learn/${pickedLesson.stage}/${pickedLesson.slug}`,
+      estimatedMinutes: pickedLesson.estimatedMinutes,
+      completed: lessonDone,
+    });
+  }
+
+  // 2. Recommended Lab / Incident Scenario
+  const orderedDomains = [...mastery.domains].sort(
+    (a, b) => a.score - b.score,
+  );
+  let chosenScenarioId: string | undefined;
+  let scenarioDomainLabel = targetDomain.label;
+
+  for (const domSummary of orderedDomains) {
+    const meta = DIAGNOSTIC_DOMAINS.find((d) => d.id === domSummary.domainId);
+    if (!meta || meta.scenarioIds.length === 0) {
+      continue;
+    }
+    const unsolved = meta.scenarioIds.find(
+      (id) => !persisted.completedScenarioIds.includes(id),
+    );
+    chosenScenarioId = unsolved ?? meta.scenarioIds[0];
+    scenarioDomainLabel = domSummary.label;
+    break;
+  }
+
+  if (chosenScenarioId) {
+    const scenarioDone =
+      persisted.completedScenarioIds.includes(chosenScenarioId);
+    const scenarioAction = buildScenarioAction(
+      chosenScenarioId,
+      persisted.completedScenarioIds,
+      scenarioDone
+        ? `${scenarioDomainLabel} の重要ハンズオンをタイムライン見直しで復習します。`
+        : `${scenarioDomainLabel} の実践課題を手を動かして突破します。`,
+    );
+    if (scenarioAction) {
+      actions.push(scenarioAction);
+    }
+  }
+
+  // 3. Recommended Tool / Drill
+  const targetDrillId = domainMeta.drillIds[0] ?? "config-review";
+  const toolMeta =
+    TOOLS_META.find((t) => t.id === targetDrillId) ?? TOOLS_META[0];
+  if (toolMeta) {
+    const solved = persisted.drillStats[toolMeta.id]?.solved ?? 0;
+    actions.push({
+      kind: "tool",
+      badge: toolMeta.badge,
+      title: toolMeta.title,
+      reason:
+        solved > 0
+          ? `これまでの正解 ${solved} 問から、さらに実戦感覚を仕上げます。`
+          : `${targetDomain.label} に関連する反復ドリルを5問挑戦しましょう。`,
+      href: `/tools?tab=${encodeURIComponent(toolMeta.id)}`,
+      estimatedMinutes: 8,
+      completed: solved >= 5,
+    });
+  }
+
+  const totalEstimatedMinutes = actions.reduce(
+    (sum, item) => sum + item.estimatedMinutes,
+    0,
+  );
+
+  return {
+    targetDomain,
+    totalEstimatedMinutes,
+    summary: `現在の最弱ドメインは「${targetDomain.label} (${targetDomain.score}%)」です。記事・実機・ツールの3ステップ（約${totalEstimatedMinutes}分）で効率的に弱点を底上げできます。`,
+    actions,
   };
 }

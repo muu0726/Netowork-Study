@@ -21,6 +21,8 @@ export interface TerminalLine {
 interface CliTerminalProps {
   device: NetworkDevice;
   networkState: NetworkState;
+  devices?: NetworkDevice[];
+  onSelectDevice?: (deviceId: string) => void;
   lines: TerminalLine[];
   commandHistory: string[];
   inputValue: string;
@@ -69,6 +71,8 @@ function getLongestCommonPrefix(values: string[]): string {
 export function CliTerminal({
   device,
   networkState,
+  devices,
+  onSelectDevice,
   lines,
   commandHistory,
   inputValue,
@@ -199,6 +203,42 @@ export function CliTerminal({
         </div>
       </div>
 
+      {/* Explicit Device Selector Strip */}
+      {devices && devices.length > 0 && onSelectDevice && (
+        <div
+          role="group"
+          aria-label="CLI接続機器の切替"
+          onClick={(event) => event.stopPropagation()}
+          className="flex flex-wrap items-center gap-1.5 border-b border-slate-800/80 bg-[#070b14] px-4 py-2"
+        >
+          <span className="mr-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Target:
+          </span>
+          {devices.map((d) => {
+            const isCurrent = d.id === device.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                aria-pressed={isCurrent}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectDevice(d.id);
+                }}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium transition-colors",
+                  isCurrent
+                    ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-200"
+                    : "border-slate-800 bg-[#0d1322] text-slate-400 hover:border-slate-700 hover:text-slate-200",
+                )}
+              >
+                {d.hostname}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Output Scroll Area */}
       <div
         ref={scrollRef}
@@ -258,9 +298,16 @@ export function CliTerminal({
 
       {/* Command Input Prompt */}
       <div className="flex items-center gap-2 border-t border-slate-800/90 bg-[#070b14] px-4 py-2.5 font-mono text-xs sm:text-[13px]">
-        <span className="shrink-0 font-semibold text-cyan-400">{prompt}</span>
+        <label
+          htmlFor="cli-command-input"
+          className="shrink-0 font-semibold text-cyan-400"
+        >
+          {prompt}
+        </label>
         <input
           ref={inputRef}
+          id="cli-command-input"
+          name="cliCommand"
           type="text"
           value={inputValue}
           onChange={(event) => {

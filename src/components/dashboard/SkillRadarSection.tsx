@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Compass, ShieldAlert, Shuffle, Target } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  Compass,
+  ShieldAlert,
+  Shuffle,
+  Target,
+  Terminal,
+  Wrench,
+} from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useHydrated } from "@/hooks/useHydrated";
 import {
+  buildStudyPrescription,
   computeDomainMastery,
   pickRandomIncidentChallenge,
 } from "@/lib/diagnostic-engine";
@@ -63,14 +74,16 @@ export function SkillRadarSection() {
 
   const [challengeSeed, setChallengeSeed] = useState(1);
 
-  const mastery = computeDomainMastery({
+  const persistedSnapshot = {
     completedLessonIds,
     completedScenarioIds,
     quizScores,
     drillStats,
     diagnosticDomainScores,
     lastVisitedPath,
-  });
+  };
+  const mastery = computeDomainMastery(persistedSnapshot);
+  const prescription = buildStudyPrescription(persistedSnapshot);
 
   const randomChallenge = pickRandomIncidentChallenge(
     challengeSeed,
@@ -250,24 +263,64 @@ export function SkillRadarSection() {
             </div>
 
             {hydrated && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs">
-                <div className="flex items-center gap-2 text-amber-100">
-                  <Compass className="h-4 w-4 shrink-0 text-amber-300" />
-                  <span>
-                    重点補強ポイント:{" "}
-                    <strong className="text-amber-200">
-                      {mastery.weakestDomain.label}
-                    </strong>{" "}
-                    ({mastery.weakestDomain.score}%)
-                  </span>
+              <div className="space-y-3 rounded-xl border border-amber-500/35 bg-gradient-to-br from-amber-500/10 via-[#080d19] to-cyan-500/5 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
+                    <Compass className="h-4 w-4 text-amber-300" />
+                    <span>今日の復習処方箋（弱点自動リコメンド）</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="amber">
+                      重点: {prescription.targetDomain.shortLabel} (
+                      {prescription.targetDomain.score}%)
+                    </Badge>
+                    <Badge variant="slate">
+                      約{prescription.totalEstimatedMinutes}分
+                    </Badge>
+                  </div>
                 </div>
-                <Link
-                  href={mastery.weakestDomain.recommendedHref}
-                  className="inline-flex items-center gap-1 font-semibold text-amber-200 hover:text-amber-100"
-                >
-                  <span>{mastery.weakestDomain.recommendedLabel} へ</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
+
+                <p className="text-xs leading-relaxed text-slate-300">
+                  {prescription.summary}
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {prescription.actions.map((act) => (
+                    <Link
+                      key={`${act.kind}-${act.href}`}
+                      href={act.href}
+                      className="group flex flex-col justify-between rounded-lg border border-slate-800 bg-[#060a14] p-2.5 transition-colors hover:border-cyan-500/50"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-cyan-300">
+                            {act.kind === "lesson" ? (
+                              <BookOpen className="h-3 w-3" />
+                            ) : act.kind === "scenario" ? (
+                              <Terminal className="h-3 w-3 text-amber-300" />
+                            ) : (
+                              <Wrench className="h-3 w-3 text-violet-300" />
+                            )}
+                            {act.badge}
+                          </span>
+                          {act.completed && (
+                            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                          )}
+                        </div>
+                        <p className="line-clamp-2 text-xs font-bold text-slate-100 group-hover:text-cyan-200">
+                          {act.title}
+                        </p>
+                        <p className="line-clamp-2 text-[11px] leading-snug text-slate-400">
+                          {act.reason}
+                        </p>
+                      </div>
+                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300">
+                        <span>開く ({act.estimatedMinutes}分)</span>
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
           </Card>
@@ -299,7 +352,7 @@ export function SkillRadarSection() {
             </p>
             <div className="mt-3 flex justify-end">
               <Link
-                href={randomChallenge.href}
+                href={randomChallenge.deepLinkHref}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
               >
                 <span>{randomChallenge.categoryLabel} を開く</span>

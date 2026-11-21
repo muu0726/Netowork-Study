@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   Cloud,
+  DatabaseBackup,
   LayoutDashboard,
   Network,
   ShieldAlert,
@@ -12,6 +13,8 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
+import { useState } from "react";
+import { ProgressBackupModal } from "@/components/dashboard/ProgressBackupModal";
 import { cn } from "@/lib/cn";
 import {
   CLOUD_SCENARIOS_META,
@@ -81,6 +84,7 @@ interface SidebarProps {
 export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const hydrated = useHydrated();
+  const [backupOpen, setBackupOpen] = useState(false);
   const completedLessonIds = useLearningStore(
     (state) => state.completedLessonIds,
   );
@@ -197,8 +201,21 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               <span className="h-3.5 w-12 animate-pulse rounded bg-slate-800" />
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setBackupOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-[#070b14] px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:text-cyan-200"
+          >
+            <DatabaseBackup className="h-3.5 w-3.5 text-cyan-400" />
+            <span>バックアップ / 復元</span>
+          </button>
         </div>
       </div>
+
+      <ProgressBackupModal
+        open={backupOpen}
+        onClose={() => setBackupOpen(false)}
+      />
     </aside>
   );
 }

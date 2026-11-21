@@ -249,8 +249,15 @@ function WiresharkCaseSession({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">選択中の原因パケット:</span>
+            <label
+              htmlFor="wireshark-packet-select"
+              className="text-xs text-slate-400"
+            >
+              選択中の原因パケット:
+            </label>
             <select
+              id="wireshark-packet-select"
+              name="wiresharkPacketNo"
               aria-label="原因パケット番号を選択"
               value={selectedPacketNo}
               disabled={submitted}

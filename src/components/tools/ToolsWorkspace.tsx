@@ -1,6 +1,7 @@
 "use client";
 
 import { Binary, FileSearch, GitCompare, Globe, Wrench } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ConfigReviewDrill } from "@/components/tools/ConfigReviewDrill";
 import { Ipv6Tool } from "@/components/tools/Ipv6Tool";
@@ -22,8 +23,19 @@ const TOOL_ICONS: Record<ActiveToolId, typeof Binary> = {
   "config-review": GitCompare,
 };
 
-export function ToolsWorkspace() {
-  const [activeTool, setActiveTool] = useState<ActiveToolId>("subnet");
+const VALID_TOOL_IDS: ActiveToolId[] = [
+  "subnet",
+  "ipv6",
+  "wireshark",
+  "config-review",
+];
+
+function ToolsWorkspaceInner({
+  initialToolId,
+}: {
+  initialToolId: ActiveToolId;
+}) {
+  const [activeTool, setActiveTool] = useState<ActiveToolId>(initialToolId);
   const hydrated = useHydrated();
   const drillStats = useLearningStore((state) => state.drillStats);
 
@@ -126,5 +138,21 @@ export function ToolsWorkspace() {
       {activeTool === "wireshark" && <WiresharkDrill />}
       {activeTool === "config-review" && <ConfigReviewDrill />}
     </div>
+  );
+}
+
+export function ToolsWorkspace() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialToolId: ActiveToolId =
+    tabParam && VALID_TOOL_IDS.includes(tabParam as ActiveToolId)
+      ? (tabParam as ActiveToolId)
+      : "subnet";
+
+  return (
+    <ToolsWorkspaceInner
+      key={tabParam ?? "default"}
+      initialToolId={initialToolId}
+    />
   );
 }
