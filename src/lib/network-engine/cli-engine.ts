@@ -1,5 +1,11 @@
 import { normalizeAclProtocol } from "./acl-nat-dhcp";
 import {
+  formatEtherChannelSummary,
+  formatIpv6InterfaceBrief,
+  formatPortSecurity,
+  simulateIpv6Ping,
+} from "./advanced-protocols";
+import {
   calculateSubnet,
   isSameSubnet,
   isValidHostIp,
@@ -7,6 +13,7 @@ import {
   maskToPrefix,
   parseIpv4,
 } from "./ip-math";
+import { compressIpv6, parseIpv6 } from "./ipv6-math";
 import {
   getRouterRoutingTable,
   isInterfaceOperationalUp,
@@ -385,6 +392,21 @@ function getHelpEntriesForDevice(device: NetworkDevice): HelpEntry[] {
           keywords: ["show standby brief"],
         },
         {
+          usage: "show etherchannel summary",
+          description: "EtherChannel (LACP / Port-Channel) の束ね状態を表示",
+          keywords: ["show etherchannel summary"],
+        },
+        {
+          usage: "show port-security [interface <if>]",
+          description: "Port Security 状態と err-disabled の有無を表示",
+          keywords: ["show port-security"],
+        },
+        {
+          usage: "show ipv6 interface brief",
+          description: "各インターフェースのIPv6アドレスと状態を表示",
+          keywords: ["show ipv6 interface brief"],
+        },
+        {
           usage: "ping <ip|hostname>",
           description: "ICMP疎通確認を実行",
           keywords: ["ping"],
@@ -474,6 +496,11 @@ function getHelpEntriesForDevice(device: NetworkDevice): HelpEntry[] {
           keywords: ["spanning-tree vlan"],
         },
         {
+          usage: "ipv6 unicast-routing",
+          description: "ルータのIPv6ユニキャストルーティングを有効化",
+          keywords: ["ipv6 unicast-routing"],
+        },
+        {
           usage: "do <command>",
           description: "設定モードのまま特権コマンド (show/ping等) を実行",
           keywords: ["do"],
@@ -556,6 +583,21 @@ function getHelpEntriesForDevice(device: NetworkDevice): HelpEntry[] {
           usage: "no switchport trunk allowed vlan",
           description: "トランク許可VLAN制限を解除 (all)",
           keywords: ["no switchport trunk allowed vlan"],
+        },
+        {
+          usage: "channel-group <1-6> mode active|passive|on",
+          description: "EtherChannel (LACP / Static) グループへ参加",
+          keywords: ["channel-group"],
+        },
+        {
+          usage: "switchport port-security [maximum <n>|violation <mode>]",
+          description: "ポートセキュリティ有効化・最大MAC数・違反動作を設定",
+          keywords: ["switchport port-security"],
+        },
+        {
+          usage: "ipv6 address <addr/prefix>",
+          description: "インターフェースへIPv6アドレスを設定",
+          keywords: ["ipv6 address"],
         },
         {
           usage: "interface <name>",
@@ -958,7 +1000,11 @@ function formatShowIpInterfaceBrief(
     const ipStr = iface.ip ?? "unassigned";
     const ok = "YES";
     const method = iface.ip ? "manual" : "unset";
-    const status = iface.adminUp ? "up" : "administratively down";
+    const status = iface.portSecurity?.errDisabled
+      ? "err-disabled"
+      : iface.adminUp
+        ? "up"
+        : "administratively down";
     const protocol = isInterfaceOperationalUp(state, device.id, iface.name)
       ? "up"
       : "down";
@@ -1048,6 +1094,9 @@ function formatShowRunningConfig(device: NetworkDevice): string {
     `hostname ${device.hostname}`,
     "!",
   ];
+  if (device.ipv6UnicastRouting) {
+    lines.push("ipv6 unicast-routing", "!");
+  }
 
   const vlans = Object.values(device.vlans)
     .filter((v) => v.id !== 1)
@@ -1092,6 +1141,9 @@ function formatShowRunningConfig(device: NetworkDevice): string {
     if (iface.ip && iface.subnetMask) {
       lines.push(` ip address ${iface.ip} ${iface.subnetMask}`);
     }
+    if (iface.ipv6Address) {
+      lines.push(` ipv6 address ${iface.ipv6Address}`);
+    }
     if (iface.natRole) {
       lines.push(` ip nat ${iface.natRole}`);
     }
@@ -1133,6 +1185,18 @@ function formatShowRunningConfig(device: NetworkDevice): string {
           ? iface.trunkAllowedVlans.join(",")
           : "none";
       lines.push(` switchport trunk allowed vlan ${list}`);
+    }
+    if (iface.channelGroup !== undefined) {
+      lines.push(
+        ` channel-group ${iface.channelGroup} mode ${iface.channelMode ?? "on"}`,
+      );
+    }
+    if (iface.portSecurity?.enabled) {
+      lines.push(" switchport port-security");
+      lines.push(` switchport port-security maximum ${iface.portSecurity.maxMac}`);
+      lines.push(
+        ` switchport port-security violation ${iface.portSecurity.violation}`,
+      );
     }
     if (!iface.adminUp) {
       lines.push(" shutdown");
@@ -1479,6 +1543,7 @@ function handleShowCommand(
 
   const first = matchKeyword(args[0], [
     "ip",
+    "ipv6",
     "vlan",
     "running-config",
     "mac",
@@ -1486,6 +1551,8 @@ function handleShowCommand(
     "access-lists",
     "spanning-tree",
     "standby",
+    "etherchannel",
+    "port-security",
   ]);
   if (first.kind === "ambiguous") {
     return {
@@ -1496,6 +1563,72 @@ function handleShowCommand(
   }
   if (first.kind === "none") {
     return buildInvalidInputResult(state, device, rawTokens);
+  }
+
+  if (first.value === "etherchannel") {
+    if (args.length < 2) {
+      return {
+        nextState: state,
+        output: "% Incomplete command. Usage: show etherchannel summary",
+        prompt: getDevicePrompt(device),
+      };
+    }
+    const sumKw = matchKeyword(args[1], ["summary"]);
+    if (sumKw.kind !== "exact") {
+      return buildInvalidInputResult(state, device, rawTokens);
+    }
+    return {
+      nextState: state,
+      output: formatEtherChannelSummary(state, device.id),
+      prompt: getDevicePrompt(device),
+    };
+  }
+
+  if (first.value === "port-security") {
+    if (args.length === 1) {
+      return {
+        nextState: state,
+        output: formatPortSecurity(state, device.id),
+        prompt: getDevicePrompt(device),
+      };
+    }
+    const ifKw = matchKeyword(args[1], ["interface"]);
+    if (ifKw.kind !== "exact") {
+      return buildInvalidInputResult(state, device, rawTokens);
+    }
+    if (args.length < 3) {
+      return {
+        nextState: state,
+        output: "% Incomplete command. Usage: show port-security interface <name>",
+        prompt: getDevicePrompt(device),
+      };
+    }
+    const norm = normalizeInterfaceName(args.slice(2).join(""), device.interfaces);
+    return {
+      nextState: state,
+      output: formatPortSecurity(state, device.id, norm ?? args[2]),
+      prompt: getDevicePrompt(device),
+    };
+  }
+
+  if (first.value === "ipv6") {
+    if (args.length < 3) {
+      return {
+        nextState: state,
+        output: "% Incomplete command. Usage: show ipv6 interface brief",
+        prompt: getDevicePrompt(device),
+      };
+    }
+    const ifKw = matchKeyword(args[1], ["interface"]);
+    const brKw = matchKeyword(args[2], ["brief"]);
+    if (ifKw.kind !== "exact" || brKw.kind !== "exact") {
+      return buildInvalidInputResult(state, device, rawTokens);
+    }
+    return {
+      nextState: state,
+      output: formatIpv6InterfaceBrief(state, device.id),
+      prompt: getDevicePrompt(device),
+    };
   }
 
   if (first.value === "spanning-tree") {
@@ -2384,7 +2517,9 @@ function executeEndHostCommand(
         prompt: getDevicePrompt(device),
       };
     }
-    const sim = simulatePing(state, device.id, tokens[1]);
+    const sim = tokens[1].includes(":")
+      ? simulateIpv6Ping(state, device.id, tokens[1])
+      : simulatePing(state, device.id, tokens[1]);
     return {
       nextState: sim.nextState,
       output: sim.output,
@@ -2707,7 +2842,9 @@ function executeIosPrivilegedOrUserCommand(
           prompt: getDevicePrompt(device),
         };
       }
-      const sim = simulatePing(state, device.id, tokens[1]);
+      const sim = tokens[1].includes(":")
+        ? simulateIpv6Ping(state, device.id, tokens[1])
+        : simulatePing(state, device.id, tokens[1]);
       return {
         nextState: sim.nextState,
         output: sim.output,
@@ -3063,6 +3200,7 @@ function executeConfigMode(
     "interface",
     "vlan",
     "ip",
+    "ipv6",
     "access-list",
     "router",
     "spanning-tree",
@@ -3083,6 +3221,29 @@ function executeConfigMode(
   }
 
   switch (matched.value) {
+    case "ipv6": {
+      if (tokens.length < 2) {
+        return {
+          nextState: state,
+          output: "% Incomplete command. Usage: ipv6 unicast-routing",
+          prompt: getDevicePrompt(device),
+        };
+      }
+      const urKw = matchKeyword(tokens[1], ["unicast-routing"]);
+      if (urKw.kind !== "exact") {
+        return buildInvalidInputResult(state, device, tokens);
+      }
+      const nextDevice: NetworkDevice = {
+        ...device,
+        ipv6UnicastRouting: true,
+      };
+      return {
+        nextState: updateDevice(state, nextDevice),
+        output: "",
+        prompt: getDevicePrompt(nextDevice),
+      };
+    }
+
     case "router": {
       if (tokens.length < 3) {
         return {
@@ -3601,6 +3762,7 @@ function executeConfigMode(
         "interface",
         "vlan",
         "ip",
+        "ipv6",
         "access-list",
         "router",
         "spanning-tree",
@@ -3614,6 +3776,29 @@ function executeConfigMode(
       }
       if (target.kind === "none") {
         return buildInvalidInputResult(state, device, tokens);
+      }
+
+      if (target.value === "ipv6") {
+        if (tokens.length < 3) {
+          return {
+            nextState: state,
+            output: "% Incomplete command. Usage: no ipv6 unicast-routing",
+            prompt: getDevicePrompt(device),
+          };
+        }
+        const urKw = matchKeyword(tokens[2], ["unicast-routing"]);
+        if (urKw.kind !== "exact") {
+          return buildInvalidInputResult(state, device, tokens);
+        }
+        const nextDevice: NetworkDevice = {
+          ...device,
+          ipv6UnicastRouting: false,
+        };
+        return {
+          nextState: updateDevice(state, nextDevice),
+          output: "",
+          prompt: getDevicePrompt(nextDevice),
+        };
       }
 
       if (target.value === "router") {
@@ -4029,6 +4214,7 @@ function executeInterfaceOrSubifMode(
     ? [
         "encapsulation",
         "ip",
+        "ipv6",
         "shutdown",
         "standby",
         "no",
@@ -4039,8 +4225,10 @@ function executeInterfaceOrSubifMode(
       ]
     : [
         "ip",
+        "ipv6",
         "shutdown",
         "switchport",
+        "channel-group",
         "standby",
         "no",
         "interface",
@@ -4120,7 +4308,89 @@ function executeInterfaceOrSubifMode(
 
   switch (matched.value) {
     case "shutdown":
-      return updateCurrentInterface((prev) => ({ ...prev, adminUp: false }));
+      return updateCurrentInterface((prev) => ({
+        ...prev,
+        adminUp: false,
+        ...(prev.portSecurity
+          ? { portSecurity: { ...prev.portSecurity, errDisabled: false } }
+          : {}),
+      }));
+
+    case "ipv6": {
+      if (tokens.length < 3) {
+        return {
+          nextState: state,
+          output: "% Incomplete command. Usage: ipv6 address <addr/prefix>",
+          prompt: getDevicePrompt(device),
+        };
+      }
+      const addrKw = matchKeyword(tokens[1], ["address"]);
+      if (addrKw.kind !== "exact") {
+        return buildInvalidInputResult(state, device, tokens);
+      }
+      const parsed = parseIpv6(tokens[2]);
+      if (!parsed.ok || parsed.prefixLength === undefined) {
+        return buildInvalidInputResult(
+          state,
+          device,
+          tokens,
+          parsed.ok
+            ? `プレフィックス長 (例: ${tokens[2]}/64) を含めて指定してください。`
+            : parsed.error,
+        );
+      }
+      const canonical = `${compressIpv6(tokens[2].split("/")[0])}/${parsed.prefixLength}`;
+      return updateCurrentInterface((prev) => ({
+        ...prev,
+        ipv6Address: canonical,
+      }));
+    }
+
+    case "channel-group": {
+      if (tokens.length < 4) {
+        return {
+          nextState: state,
+          output:
+            "% Incomplete command. Usage: channel-group <1-6> mode <active|passive|on>",
+          prompt: getDevicePrompt(device),
+        };
+      }
+      if (!/^\d+$/.test(tokens[1])) {
+        return buildInvalidInputResult(
+          state,
+          device,
+          tokens,
+          `channel-group 番号は 1〜6 の整数で指定してください: "${tokens[1]}"`,
+        );
+      }
+      const grp = Number(tokens[1]);
+      if (grp < 1 || grp > 6) {
+        return buildInvalidInputResult(
+          state,
+          device,
+          tokens,
+          `channel-group 番号は 1〜6 の範囲で指定してください: ${grp}`,
+        );
+      }
+      const modeKw = matchKeyword(tokens[2], ["mode"]);
+      if (modeKw.kind !== "exact") {
+        return buildInvalidInputResult(state, device, tokens);
+      }
+      const modeVal = matchKeyword(tokens[3], ["active", "passive", "on"]);
+      if (modeVal.kind !== "exact") {
+        return buildInvalidInputResult(
+          state,
+          device,
+          tokens,
+          `EtherChannel モードは active / passive / on のいずれかを指定してください: "${tokens[3]}"`,
+        );
+      }
+      return updateCurrentInterface((prev) => ({
+        ...prev,
+        channelGroup: grp,
+        channelMode: modeVal.value as "active" | "passive" | "on",
+      }));
+    }
 
     case "standby": {
       if (tokens.length < 3) {
@@ -4422,7 +4692,12 @@ function executeInterfaceOrSubifMode(
           prompt: getDevicePrompt(device),
         };
       }
-      const spSub = matchKeyword(tokens[1], ["mode", "access", "trunk"]);
+      const spSub = matchKeyword(tokens[1], [
+        "mode",
+        "access",
+        "trunk",
+        "port-security",
+      ]);
       if (spSub.kind === "ambiguous") {
         return {
           nextState: state,
@@ -4432,6 +4707,75 @@ function executeInterfaceOrSubifMode(
       }
       if (spSub.kind === "none") {
         return buildInvalidInputResult(state, device, tokens);
+      }
+
+      if (spSub.value === "port-security") {
+        if (tokens.length === 2) {
+          return updateCurrentInterface((prev) => ({
+            ...prev,
+            portSecurity: {
+              enabled: true,
+              maxMac: prev.portSecurity?.maxMac ?? 1,
+              violation: prev.portSecurity?.violation ?? "shutdown",
+              errDisabled: prev.portSecurity?.errDisabled ?? false,
+              learnedMacs: prev.portSecurity?.learnedMacs ?? [],
+            },
+          }));
+        }
+        const psOpt = matchKeyword(tokens[2], ["maximum", "violation"]);
+        if (psOpt.kind !== "exact") {
+          return buildInvalidInputResult(state, device, tokens);
+        }
+        if (tokens.length < 4) {
+          return {
+            nextState: state,
+            output: "% Incomplete command.",
+            prompt: getDevicePrompt(device),
+          };
+        }
+        if (psOpt.value === "maximum") {
+          if (!/^\d+$/.test(tokens[3])) {
+            return buildInvalidInputResult(
+              state,
+              device,
+              tokens,
+              `最大MAC数は 1〜10 の整数で指定してください: "${tokens[3]}"`,
+            );
+          }
+          const maxMac = Number(tokens[3]);
+          if (maxMac < 1 || maxMac > 10) {
+            return buildInvalidInputResult(
+              state,
+              device,
+              tokens,
+              `最大MAC数は 1〜10 の範囲で指定してください: ${maxMac}`,
+            );
+          }
+          return updateCurrentInterface((prev) => ({
+            ...prev,
+            portSecurity: {
+              enabled: prev.portSecurity?.enabled ?? true,
+              maxMac,
+              violation: prev.portSecurity?.violation ?? "shutdown",
+              errDisabled: prev.portSecurity?.errDisabled ?? false,
+              learnedMacs: prev.portSecurity?.learnedMacs ?? [],
+            },
+          }));
+        }
+        const viol = matchKeyword(tokens[3], ["shutdown", "restrict", "protect"]);
+        if (viol.kind !== "exact") {
+          return buildInvalidInputResult(state, device, tokens);
+        }
+        return updateCurrentInterface((prev) => ({
+          ...prev,
+          portSecurity: {
+            enabled: prev.portSecurity?.enabled ?? true,
+            maxMac: prev.portSecurity?.maxMac ?? 1,
+            violation: viol.value as "shutdown" | "restrict" | "protect",
+            errDisabled: prev.portSecurity?.errDisabled ?? false,
+            learnedMacs: prev.portSecurity?.learnedMacs ?? [],
+          },
+        }));
       }
 
       if (spSub.value === "mode") {
@@ -4601,8 +4945,8 @@ function executeInterfaceOrSubifMode(
         };
       }
       const noCandidates = isSubif
-        ? ["encapsulation", "ip", "shutdown", "standby"]
-        : ["ip", "shutdown", "switchport", "standby"];
+        ? ["encapsulation", "ip", "ipv6", "shutdown", "standby"]
+        : ["ip", "ipv6", "shutdown", "switchport", "channel-group", "standby"];
       const noTarget = matchKeyword(tokens[1], noCandidates);
       if (noTarget.kind === "ambiguous") {
         return {
@@ -4617,6 +4961,23 @@ function executeInterfaceOrSubifMode(
 
       if (noTarget.value === "shutdown") {
         return updateCurrentInterface((prev) => ({ ...prev, adminUp: true }));
+      }
+
+      if (noTarget.value === "ipv6") {
+        return updateCurrentInterface((prev) => {
+          const next = { ...prev };
+          delete next.ipv6Address;
+          return next;
+        });
+      }
+
+      if (noTarget.value === "channel-group") {
+        return updateCurrentInterface((prev) => {
+          const next = { ...prev };
+          delete next.channelGroup;
+          delete next.channelMode;
+          return next;
+        });
       }
 
       if (noTarget.value === "standby") {

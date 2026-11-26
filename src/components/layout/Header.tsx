@@ -25,6 +25,9 @@ function getRouteMeta(pathname: string): RouteTitleMeta {
   if (pathname.startsWith("/labs/cloud")) {
     return { section: "Cloud VPC Lab", title: "AWS VPC / SG・NACL 実践ラボ" };
   }
+  if (pathname.startsWith("/labs/sandbox")) {
+    return { section: "Sandbox Lab", title: "フリービルド・サンドボックス" };
+  }
   if (pathname.startsWith("/tools")) {
     return { section: "Practice Tools", title: "実践ミニツール＆ドリル" };
   }

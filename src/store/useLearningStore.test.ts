@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  computeLearningStreak,
   parseLearningProgressBackup,
   serializeLearningProgress,
   useLearningStore,
@@ -170,6 +171,50 @@ describe("useLearningStore", () => {
         }),
       );
       expect(invalid.ok).toBe(false);
+    }
+  });
+
+  it("tracks learning streaks, wrong questions, and incident clear records", () => {
+    const streak = computeLearningStreak(
+      ["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26"],
+      new Date(2026, 10, 26),
+    );
+    expect(streak.currentStreak).toBe(4);
+    expect(streak.longestStreak).toBe(4);
+    expect(streak.totalActiveDays).toBe(4);
+    expect(streak.activeLast7Days).toHaveLength(7);
+    expect(streak.activeLast7Days[6].active).toBe(true);
+
+    const store = useLearningStore.getState();
+    store.recordQuestionOutcomes([
+      { questionId: "stage1/lan-wan:q-lan-1", isCorrect: false },
+      { questionId: "stage1/lan-wan:q-lan-2", isCorrect: true },
+    ]);
+    expect(useLearningStore.getState().wrongQuestionIds).toEqual([
+      "stage1/lan-wan:q-lan-1",
+    ]);
+
+    store.recordQuestionOutcomes([
+      { questionId: "stage1/lan-wan:q-lan-1", isCorrect: true },
+    ]);
+    expect(useLearningStore.getState().wrongQuestionIds).toEqual([]);
+
+    store.recordIncidentClear("ts-vlan-mismatch", 45, 6);
+    store.recordIncidentClear("ts-vlan-mismatch", 30, 8);
+    expect(
+      useLearningStore.getState().incidentRecords?.["ts-vlan-mismatch"],
+    ).toMatchObject({
+      bestSeconds: 30,
+      bestCommands: 6,
+    });
+
+    const exported = serializeLearningProgress(useLearningStore.getState());
+    const reParsed = parseLearningProgressBackup(exported);
+    expect(reParsed.ok).toBe(true);
+    if (reParsed.ok) {
+      expect(
+        reParsed.data.incidentRecords?.["ts-vlan-mismatch"]?.bestSeconds,
+      ).toBe(30);
     }
   });
 });

@@ -29,13 +29,18 @@ import { useLearningStore } from "@/store/useLearningStore";
 function ExamSession({
   questions,
   onRestart,
+  mode = "mock",
 }: {
   questions: DiagnosticQuestion[];
   onRestart: () => void;
+  mode?: "mock" | "revenge";
 }) {
   const recordQuizScore = useLearningStore((state) => state.recordQuizScore);
   const recordDiagnosticResult = useLearningStore(
     (state) => state.recordDiagnosticResult,
+  );
+  const recordQuestionOutcomes = useLearningStore(
+    (state) => state.recordQuestionOutcomes,
   );
   const completedLessonIds = useLearningStore(
     (state) => state.completedLessonIds,
@@ -67,19 +72,29 @@ function ExamSession({
     setSubmitted(true);
     let totalCorrect = 0;
     const domainStats: Record<string, { correct: number; total: number }> = {};
+    const outcomes: Array<{ questionId: string; isCorrect: boolean }> = [];
 
     for (const q of questions) {
       const bucket = domainStats[q.domain] ?? { correct: 0, total: 0 };
       bucket.total += 1;
-      if (answers[q.id] === q.correctIndex) {
+      const isOk = answers[q.id] === q.correctIndex;
+      if (isOk) {
         bucket.correct += 1;
         totalCorrect += 1;
+      }
+      if (answers[q.id] !== undefined) {
+        outcomes.push({ questionId: q.id, isCorrect: isOk });
       }
       domainStats[q.domain] = bucket;
     }
 
-    recordQuizScore("diagnostic-exam", totalCorrect, totalCount);
-    recordDiagnosticResult(domainStats);
+    if (outcomes.length > 0) {
+      recordQuestionOutcomes(outcomes);
+    }
+    if (mode === "mock") {
+      recordQuizScore("diagnostic-exam", totalCorrect, totalCount);
+      recordDiagnosticResult(domainStats);
+    }
   };
 
   const correctCount = questions.filter(
@@ -105,13 +120,19 @@ function ExamSession({
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Badge variant="cyan">CCNA &amp; 実務 6領域模擬試験</Badge>
+            <Badge variant={mode === "revenge" ? "rose" : "cyan"}>
+              {mode === "revenge"
+                ? "誤答リベンジノート"
+                : "CCNA & 実務 6領域模擬試験"}
+            </Badge>
             <span className="font-mono text-xs text-slate-400">
               回答済み: {answeredCount} / {totalCount} 問
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            全6ドメインから均等に出題されます。合格目安スコアは 80% 以上です。
+            {mode === "revenge"
+              ? "過去に間違えた問題だけを集中的に解き直します。正解するとリベンジリストから自動的に卒業します。"
+              : "全6ドメインから均等に出題されます。合格目安スコアは 80% 以上です。"}
           </p>
         </div>
 
@@ -122,7 +143,7 @@ function ExamSession({
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#080d19] px-3 py-2 text-xs font-medium text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            別セットでやり直す
+            {mode === "revenge" ? "誤答リストを再読込" : "別セットでやり直す"}
           </button>
           {!submitted && (
             <button
@@ -337,12 +358,21 @@ export function DiagnosticExamWorkspace() {
     (state) => state.completedScenarioIds,
   );
   const quizScores = useLearningStore((state) => state.quizScores);
+  const wrongQuestionIds = useLearningStore(
+    (state) => state.wrongQuestionIds ?? [],
+  );
 
+  const [examMode, setExamMode] = useState<"mock" | "revenge">("mock");
   const [examSeed, setExamSeed] = useState(1);
+  const [revengeKey, setRevengeKey] = useState(1);
   const [ticketSeed, setTicketSeed] = useState(1);
 
-  const totalBankCount = buildDiagnosticQuestionBank().length;
+  const allBank = buildDiagnosticQuestionBank();
+  const totalBankCount = allBank.length;
   const examQuestions = generateDiagnosticExam(12, examSeed);
+  const wrongQuestions = hydrated
+    ? allBank.filter((q) => wrongQuestionIds.includes(q.id))
+    : [];
   const challenge = pickRandomIncidentChallenge(
     ticketSeed,
     completedScenarioIds,
@@ -423,12 +453,66 @@ export function DiagnosticExamWorkspace() {
         </div>
       </Card>
 
-      {/* Main Keyed Exam Session */}
-      <ExamSession
-        key={examSeed}
-        questions={examQuestions}
-        onRestart={() => setExamSeed((s) => s + 1)}
-      />
+      {/* Exam Mode Tabs */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-[#090e1a] p-1.5">
+        <button
+          type="button"
+          onClick={() => setExamMode("mock")}
+          className={cn(
+            "flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition-colors sm:text-sm",
+            examMode === "mock"
+              ? "bg-cyan-500/20 text-cyan-200"
+              : "text-slate-400 hover:text-slate-200",
+          )}
+        >
+          総合模擬試験 (12問)
+        </button>
+        <button
+          type="button"
+          onClick={() => setExamMode("revenge")}
+          className={cn(
+            "flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition-colors sm:text-sm",
+            examMode === "revenge"
+              ? "bg-rose-500/20 text-rose-200"
+              : "text-slate-400 hover:text-slate-200",
+          )}
+        >
+          誤答リベンジノート ({hydrated ? wrongQuestions.length : 0}問)
+        </button>
+      </div>
+
+      {examMode === "mock" ? (
+        <ExamSession
+          key={`mock-${examSeed}`}
+          questions={examQuestions}
+          mode="mock"
+          onRestart={() => setExamSeed((s) => s + 1)}
+        />
+      ) : wrongQuestions.length === 0 ? (
+        <Card className="p-8 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400" />
+          <h3 className="mt-3 text-base font-bold text-slate-100">
+            未克服の誤答問題はありません
+          </h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+            模擬試験や各レッスンの章末クイズで間違えた問題があると、ここに自動でストックされて集中的に解き直せます。
+          </p>
+          <button
+            type="button"
+            onClick={() => setExamMode("mock")}
+            className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400"
+          >
+            模擬試験に挑戦する
+          </button>
+        </Card>
+      ) : (
+        <ExamSession
+          key={`revenge-${revengeKey}`}
+          questions={wrongQuestions}
+          mode="revenge"
+          onRestart={() => setRevengeKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

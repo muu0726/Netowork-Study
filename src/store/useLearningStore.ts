@@ -19,6 +19,12 @@ export interface DomainExamRecord {
   total: number;
 }
 
+export interface IncidentBestRecord {
+  bestSeconds: number;
+  bestCommands: number;
+  clearedAt: string;
+}
+
 export interface PersistedLearningState {
   completedLessonIds: string[];
   completedScenarioIds: string[];
@@ -26,6 +32,94 @@ export interface PersistedLearningState {
   drillStats: Record<string, DrillStatRecord>;
   diagnosticDomainScores?: Record<string, DomainExamRecord>;
   lastVisitedPath: string | null;
+  activityDates?: string[];
+  wrongQuestionIds?: string[];
+  incidentRecords?: Record<string, IncidentBestRecord>;
+}
+
+export interface LearningStreakSummary {
+  currentStreak: number;
+  longestStreak: number;
+  totalActiveDays: number;
+  activeLast7Days: Array<{ dateKey: string; active: boolean }>;
+}
+
+export function getTodayDateKey(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysToDateKey(dateKey: string, deltaDays: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  const ny = dt.getUTCFullYear();
+  const nm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const nd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${ny}-${nm}-${nd}`;
+}
+
+export function computeLearningStreak(
+  activityDates: readonly string[],
+  today: Date = new Date(),
+): LearningStreakSummary {
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const validSet = new Set(activityDates.filter((d) => dateRegex.test(d)));
+  const sorted = [...validSet].sort();
+
+  const todayKey = getTodayDateKey(today);
+  const yesterdayKey = addDaysToDateKey(todayKey, -1);
+
+  let currentStreak = 0;
+  if (validSet.has(todayKey) || validSet.has(yesterdayKey)) {
+    let cursor = validSet.has(todayKey) ? todayKey : yesterdayKey;
+    while (validSet.has(cursor)) {
+      currentStreak += 1;
+      cursor = addDaysToDateKey(cursor, -1);
+    }
+  }
+
+  let longestStreak = 0;
+  let run = 0;
+  let prevKey: string | null = null;
+  for (const key of sorted) {
+    if (prevKey && addDaysToDateKey(prevKey, 1) === key) {
+      run += 1;
+    } else {
+      run = 1;
+    }
+    if (run > longestStreak) {
+      longestStreak = run;
+    }
+    prevKey = key;
+  }
+
+  const activeLast7Days: Array<{ dateKey: string; active: boolean }> = [];
+  for (let offset = -6; offset <= 0; offset += 1) {
+    const key = addDaysToDateKey(todayKey, offset);
+    activeLast7Days.push({
+      dateKey: key,
+      active: validSet.has(key),
+    });
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+    totalActiveDays: validSet.size,
+    activeLast7Days,
+  };
+}
+
+function appendTodayActivity(
+  dates: readonly string[] | undefined,
+  now: Date = new Date(),
+): string[] {
+  const todayKey = getTodayDateKey(now);
+  const prev = dates ?? [];
+  return prev.includes(todayKey) ? [...prev] : [...prev, todayKey];
 }
 
 export const PROGRESS_BACKUP_VERSION = 1;
@@ -54,6 +148,9 @@ export function serializeLearningProgress(state: PersistedLearningState): string
       drillStats: state.drillStats ?? {},
       diagnosticDomainScores: state.diagnosticDomainScores ?? {},
       lastVisitedPath: state.lastVisitedPath ?? null,
+      activityDates: [...new Set(state.activityDates ?? [])],
+      wrongQuestionIds: [...new Set(state.wrongQuestionIds ?? [])],
+      incidentRecords: state.incidentRecords ?? {},
     },
   };
   return JSON.stringify(payload, null, 2);
@@ -228,6 +325,58 @@ export function parseLearningProgressBackup(
     lastVisitedPath = rawData.lastVisitedPath;
   }
 
+  const activityDates: string[] = [];
+  if (rawData.activityDates !== undefined) {
+    const sanitized = sanitizeStringArray(rawData.activityDates);
+    if (!sanitized || sanitized.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
+      return {
+        ok: false,
+        error: "activityDates の形式が不正です (YYYY-MM-DD)。",
+      };
+    }
+    activityDates.push(...sanitized);
+  }
+
+  const wrongQuestionIds: string[] = [];
+  if (rawData.wrongQuestionIds !== undefined) {
+    const sanitized = sanitizeStringArray(rawData.wrongQuestionIds);
+    if (!sanitized) {
+      return { ok: false, error: "wrongQuestionIds の形式が不正です。" };
+    }
+    wrongQuestionIds.push(...sanitized);
+  }
+
+  const incidentRecords: Record<string, IncidentBestRecord> = {};
+  if (rawData.incidentRecords !== undefined) {
+    if (!isPlainRecord(rawData.incidentRecords)) {
+      return { ok: false, error: "incidentRecords の形式が不正です。" };
+    }
+    for (const [k, v] of Object.entries(rawData.incidentRecords)) {
+      if (
+        !isPlainRecord(v) ||
+        typeof v.bestSeconds !== "number" ||
+        typeof v.bestCommands !== "number" ||
+        !Number.isFinite(v.bestSeconds) ||
+        !Number.isFinite(v.bestCommands) ||
+        v.bestSeconds < 0 ||
+        v.bestCommands < 0
+      ) {
+        return {
+          ok: false,
+          error: `incidentRecords["${k}"] の値が不正です。`,
+        };
+      }
+      incidentRecords[k] = {
+        bestSeconds: v.bestSeconds,
+        bestCommands: v.bestCommands,
+        clearedAt:
+          typeof v.clearedAt === "string"
+            ? v.clearedAt
+            : new Date().toISOString(),
+      };
+    }
+  }
+
   const data: PersistedLearningState = {
     completedLessonIds,
     completedScenarioIds,
@@ -235,6 +384,9 @@ export function parseLearningProgressBackup(
     drillStats,
     diagnosticDomainScores,
     lastVisitedPath,
+    activityDates,
+    wrongQuestionIds,
+    incidentRecords,
   };
 
   const drillSolved = Object.values(drillStats).reduce(
@@ -268,6 +420,14 @@ export interface LearningStoreState extends PersistedLearningState {
   recordDiagnosticResult: (
     domainScores: Record<string, DomainExamRecord>,
   ) => void;
+  recordQuestionOutcomes: (
+    outcomes: Array<{ questionId: string; isCorrect: boolean }>,
+  ) => void;
+  recordIncidentClear: (
+    scenarioId: string,
+    seconds: number,
+    commandsCount: number,
+  ) => void;
   setLastVisitedPath: (path: string) => void;
   importProgress: (data: PersistedLearningState) => void;
   resetProgress: () => void;
@@ -281,6 +441,9 @@ const initialPersistedState: PersistedLearningState = {
   drillStats: {},
   diagnosticDomainScores: {},
   lastVisitedPath: null,
+  activityDates: [],
+  wrongQuestionIds: [],
+  incidentRecords: {},
 };
 
 const noopStorage: StateStorage = {
@@ -308,11 +471,13 @@ export const useLearningStore = create<LearningStoreState>()(
 
       markLessonCompleted: (lessonId) =>
         set((state) => {
+          const activityDates = appendTodayActivity(state.activityDates);
           if (state.completedLessonIds.includes(lessonId)) {
-            return state;
+            return { activityDates };
           }
           return {
             completedLessonIds: [...state.completedLessonIds, lessonId],
+            activityDates,
           };
         }),
 
@@ -323,16 +488,19 @@ export const useLearningStore = create<LearningStoreState>()(
             completedLessonIds: exists
               ? state.completedLessonIds.filter((id) => id !== lessonId)
               : [...state.completedLessonIds, lessonId],
+            activityDates: appendTodayActivity(state.activityDates),
           };
         }),
 
       markScenarioCompleted: (scenarioId) =>
         set((state) => {
+          const activityDates = appendTodayActivity(state.activityDates);
           if (state.completedScenarioIds.includes(scenarioId)) {
-            return state;
+            return { activityDates };
           }
           return {
             completedScenarioIds: [...state.completedScenarioIds, scenarioId],
+            activityDates,
           };
         }),
 
@@ -354,6 +522,7 @@ export const useLearningStore = create<LearningStoreState>()(
                 updatedAt: new Date().toISOString(),
               },
             },
+            activityDates: appendTodayActivity(state.activityDates),
           };
         }),
 
@@ -378,6 +547,7 @@ export const useLearningStore = create<LearningStoreState>()(
                 bestStreak: Math.max(prev.bestStreak, nextStreakCandidate),
               },
             },
+            activityDates: appendTodayActivity(state.activityDates),
           };
         }),
 
@@ -387,7 +557,46 @@ export const useLearningStore = create<LearningStoreState>()(
             ...(state.diagnosticDomainScores ?? {}),
             ...domainScores,
           },
+          activityDates: appendTodayActivity(state.activityDates),
         })),
+
+      recordQuestionOutcomes: (outcomes) =>
+        set((state) => {
+          const wrongSet = new Set(state.wrongQuestionIds ?? []);
+          for (const item of outcomes) {
+            if (item.isCorrect) {
+              wrongSet.delete(item.questionId);
+            } else {
+              wrongSet.add(item.questionId);
+            }
+          }
+          return {
+            wrongQuestionIds: [...wrongSet],
+            activityDates: appendTodayActivity(state.activityDates),
+          };
+        }),
+
+      recordIncidentClear: (scenarioId, seconds, commandsCount) =>
+        set((state) => {
+          const safeSeconds = Math.max(0, Math.round(seconds));
+          const safeCommands = Math.max(0, Math.round(commandsCount));
+          const prev = state.incidentRecords?.[scenarioId];
+          return {
+            incidentRecords: {
+              ...(state.incidentRecords ?? {}),
+              [scenarioId]: {
+                bestSeconds: prev
+                  ? Math.min(prev.bestSeconds, safeSeconds)
+                  : safeSeconds,
+                bestCommands: prev
+                  ? Math.min(prev.bestCommands, safeCommands)
+                  : safeCommands,
+                clearedAt: new Date().toISOString(),
+              },
+            },
+            activityDates: appendTodayActivity(state.activityDates),
+          };
+        }),
 
       setLastVisitedPath: (path) =>
         set(() => ({
@@ -402,6 +611,9 @@ export const useLearningStore = create<LearningStoreState>()(
           drillStats: data.drillStats ?? {},
           diagnosticDomainScores: data.diagnosticDomainScores ?? {},
           lastVisitedPath: data.lastVisitedPath ?? null,
+          activityDates: [...new Set(data.activityDates ?? [])],
+          wrongQuestionIds: [...new Set(data.wrongQuestionIds ?? [])],
+          incidentRecords: data.incidentRecords ?? {},
         })),
 
       resetProgress: () =>
@@ -424,6 +636,9 @@ export const useLearningStore = create<LearningStoreState>()(
         drillStats: state.drillStats,
         diagnosticDomainScores: state.diagnosticDomainScores ?? {},
         lastVisitedPath: state.lastVisitedPath,
+        activityDates: state.activityDates ?? [],
+        wrongQuestionIds: state.wrongQuestionIds ?? [],
+        incidentRecords: state.incidentRecords ?? {},
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Boxes,
   Cloud,
   DatabaseBackup,
   LayoutDashboard,
@@ -68,6 +69,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "クラウドVPCラボ",
     sublabel: "AWS VPC / SG / NACL",
     icon: Cloud,
+  },
+  {
+    href: "/labs/sandbox",
+    label: "サンドボックス",
+    sublabel: "Free Build Lab",
+    icon: Boxes,
   },
   {
     href: "/tools",

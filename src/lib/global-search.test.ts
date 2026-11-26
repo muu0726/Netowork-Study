@@ -20,7 +20,7 @@ describe("Global Search Index & Command Palette Filtering", () => {
       SCENARIOS_META.length +
       CLOUD_SCENARIOS_META.length +
       TOOLS_META.length +
-      1 +
+      2 +
       expectedCommandCount;
 
     expect(index.length).toBe(expectedTotal);

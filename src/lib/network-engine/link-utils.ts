@@ -60,7 +60,7 @@ export function isPhysicalInterfaceUp(
     return false;
   }
   const iface = device.interfaces[physicalInterfaceName];
-  if (!iface || !iface.adminUp) {
+  if (!iface || !iface.adminUp || iface.portSecurity?.errDisabled) {
     return false;
   }
   if (isLoopbackInterfaceName(physicalInterfaceName)) {
@@ -74,7 +74,7 @@ export function isPhysicalInterfaceUp(
 
   const peerDevice = state.devices[connected.peerDeviceId];
   const peerIface = peerDevice?.interfaces[connected.peerInterface];
-  return Boolean(peerIface && peerIface.adminUp);
+  return Boolean(peerIface && peerIface.adminUp && !peerIface.portSecurity?.errDisabled);
 }
 
 export function isInterfaceOperationalUp(

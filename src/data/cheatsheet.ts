@@ -38,6 +38,9 @@ export const CHEAT_SHEET_SECTIONS: CheatSheetSection[] = [
       { command: "show ip ospf neighbor", description: "OSPFネイバー関係一覧確認" },
       { command: "show spanning-tree", description: "STPルートブリッジとBLKポート確認" },
       { command: "show standby brief", description: "HSRP状態 (Active/Standby/VIP) 確認" },
+      { command: "show etherchannel summary", description: "EtherChannel (Po1) 束ね状態確認" },
+      { command: "show port-security", description: "Port Security と err-disabled 確認" },
+      { command: "show ipv6 interface brief", description: "IPv6 アドレスとリンク状態を確認" },
     ],
   },
   {
@@ -49,9 +52,19 @@ export const CHEAT_SHEET_SECTIONS: CheatSheetSection[] = [
       { command: "network 192.168.10.0 0.0.0.255 area 0", description: "OSPF有効化サブネットとAreaを指定" },
       { command: "ip ospf cost 50", description: "IFのOSPFコストを変更（経路制御）" },
       { command: "spanning-tree vlan 1 priority 4096", description: "VLAN 1のSTPプライオリティを変更 (4096倍数)" },
+      { command: "channel-group 1 mode active", description: "LACP active モードで Port-Channel 1 へ参加" },
+      { command: "switchport port-security maximum 2", description: "ポートで学習を許可する最大MAC数を変更" },
       { command: "standby 10 ip 192.168.10.254", description: "HSRPグループと仮想ゲートウェイIPを設定" },
       { command: "standby 10 priority 110", description: "HSRPプライオリティを設定 (標準100)" },
       { command: "standby 10 preempt", description: "復旧時のActive切り戻し(Preempt)を有効化" },
+    ],
+  },
+  {
+    title: "IPv6 ルーティング・アドレス (Router)",
+    badge: "IPv6",
+    items: [
+      { command: "ipv6 unicast-routing", description: "ルータのIPv6ルーティングを有効化" },
+      { command: "ipv6 address 2001:db8:20::1/64", description: "IFへIPv6アドレスとプレフィックスを設定" },
     ],
   },
   {

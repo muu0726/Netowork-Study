@@ -125,4 +125,97 @@ export const CONFIG_REVIEW_CASES: ConfigReviewCase[] = [
     fixedSnippet:
       "interface Gig0/24\n switchport mode trunk\n switchport trunk allowed vlan add 30",
   },
+  {
+    id: "cr-nat-overload-missing",
+    title: "NAPT 設定 Diff レビュー（複数PCの同時外部通信不可）",
+    kind: "diff",
+    difficulty: "中級",
+    scenario:
+      "社内LAN (192.168.10.0/24) の多数のPCから、1つのWANグローバルIP (203.0.113.2) を共有してインターネットへ出られるよう投入した NAT 設定の Diff です。1台目しか通信できない不具合の原因を見抜いてください。",
+    diffLines: [
+      { type: "context", lineNo: 18, text: "interface Gig0/0" },
+      { type: "context", lineNo: 19, text: " ip nat inside" },
+      { type: "context", lineNo: 20, text: "interface Gig0/1" },
+      { type: "context", lineNo: 21, text: " ip nat outside" },
+      {
+        type: "add",
+        lineNo: 22,
+        text: "ip nat inside source list 1 interface Gig0/1",
+        highlight: true,
+      },
+    ],
+    question: "この設定で 1 台しか同時接続できない（または後続PCが変換失敗する）理由は何ですか？",
+    options: [
+      "末尾の `overload` キーワードが抜けており、ポート番号変換 (NAPT/PAT) が有効になっていない",
+      "Gig0/0 と Gig0/1 の両方を `ip nat inside` にする必要がある",
+      "標準ACL 1 ではなく拡張ACL 200 を使わなければ NAT できない",
+      "インターフェース Gig0/1 を `shutdown` してから NAT を設定していない",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "1つのWAN側グローバルIPを複数端末で共有するには、L4のポート番号も書き換える NAPT (PAT) が必須です。Cisco IOS では `ip nat inside source list 1 interface Gig0/1 overload` のように末尾へ `overload` を付け忘れると複数同時変換ができません。",
+    fixedSnippet:
+      "ip nat inside source list 1 interface Gig0/1 overload",
+  },
+  {
+    id: "cr-ospf-wildcard-error",
+    title: "OSPF ネットワーク宣言 Diff レビュー（ネイバー不成立）",
+    kind: "diff",
+    difficulty: "中級",
+    scenario:
+      "対向ルータとのWANリンク (10.0.0.0/30, Gig0/1 = 10.0.0.1) で OSPF Area 0 を有効化しようとしたところ、OSPF プロセスにインターフェースが一切参加しませんでした。問題点を選んでください。",
+    diffLines: [
+      { type: "context", lineNo: 50, text: "interface Gig0/1" },
+      { type: "context", lineNo: 51, text: " ip address 10.0.0.1 255.255.255.252" },
+      { type: "context", lineNo: 52, text: "router ospf 1" },
+      {
+        type: "add",
+        lineNo: 53,
+        text: " network 10.0.0.0 255.255.255.252 area 0",
+        highlight: true,
+      },
+    ],
+    question: "この `network` 文で Gig0/1 が OSPF 対象にならない理由は何ですか？",
+    options: [
+      "サブネットマスクではなくワイルドカードマスク (`0.0.0.3`) を指定すべき箇所に `255.255.255.252` を書いている",
+      "OSPF のプロセスID は必ず `0` にする必要がある",
+      "Area 番号は 1〜4094 の範囲で指定する必要がある",
+      "WANリンク (/30) では OSPF を動作させられない",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "Cisco IOS の OSPF `network` コマンドは、サブネットマスクのビットを反転させたワイルドカードマスク（0=一致必須, 1=無視）を取ります。`/30` (`255.255.255.252`) のワイルドカードは `0.0.0.3` です。",
+    fixedSnippet:
+      "router ospf 1\n network 10.0.0.0 0.0.0.3 area 0",
+  },
+  {
+    id: "cr-hsrp-no-preempt",
+    title: "HSRP 冗長化設計 Diff レビュー（復旧後にプライマリへ戻らない）",
+    kind: "diff",
+    difficulty: "実践",
+    scenario:
+      "プライマリルータ R1 (Priority 120) とセカンダリルータ R2 (Priority 100) で HSRP グループ 10 (VIP 192.168.10.254) を構成しました。しかし R1 のメンテナンス再起動後、R1 が復旧しても R2 が Active のまま戻ってきません。原因を特定してください。",
+    diffLines: [
+      { type: "context", lineNo: 10, text: "! R1 (Primary) interface Gig0/0" },
+      { type: "context", lineNo: 11, text: " standby 10 ip 192.168.10.254" },
+      {
+        type: "add",
+        lineNo: 12,
+        text: " standby 10 priority 120",
+        highlight: true,
+      },
+    ],
+    question: "R1 復旧後に自動で Active へ切り戻らない原因は何ですか？",
+    options: [
+      "`standby 10 preempt` が設定されていないため、すでに Active な R2 から役割を奪い返せない",
+      "R1 の Priority は 100 未満にしないと Active になれない",
+      "HSRP グループ番号 10 は予約済みで切り戻しが無効化されている",
+      "R1 側の VIP を `.253` に変える必要がある",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "HSRP ではデフォルトで非プリエンプト動作となるため、一度 Standby が Active に昇格すると、優先度の高いプライマリが復旧しても自動で切り替わりません。プライマリ側へ `standby 10 preempt` を設定することが不可欠です。",
+    fixedSnippet:
+      "interface Gig0/0\n standby 10 ip 192.168.10.254\n standby 10 priority 120\n standby 10 preempt",
+  },
 ];

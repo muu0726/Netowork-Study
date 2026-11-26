@@ -144,6 +144,27 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         explanation:
           "同一 LAN（同一サブネット）内の通信は L2スイッチが MAC アドレスを元に直接フレームを転送します。",
       },
+      {
+        id: "q-lan-3",
+        question: "PC が別のネットワーク（インターネット等）へ通信したいとき、最初にパケットを渡す出口のルータIPを何と呼びますか？",
+        choices: ["ブロードキャストアドレス", "デフォルトゲートウェイ", "ループバックアドレス", "MACアドレス"],
+        correctIndex: 1,
+        explanation:
+          "異なるネットワーク宛ての通信は、出口となるルータ（デフォルトゲートウェイ）を経由して外へ送り出されます。",
+      },
+      {
+        id: "q-lan-4",
+        question: "社内 LAN をあえてルータで複数のネットワークに分割する主な理由はどれですか？",
+        choices: [
+          "ブロードキャスト通信の範囲を区切り、混雑やセキュリティリスクを減らすため",
+          "LANケーブルの長さを10km以上に伸ばすため",
+          "PCのCPUクロックを高速化するため",
+          "IPアドレスを使わずに通信できるようにするため",
+        ],
+        correctIndex: 0,
+        explanation:
+          "ルータはブロードキャストを通過させないため、部署や拠点ごとにネットワークを分割して負荷と影響を分離できます。",
+      },
     ],
   },
   {
@@ -286,6 +307,22 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         correctIndex: 1,
         explanation:
           "MACアドレス（L2）は同一リンク内の次ホップに届けるための住所なので、ルータを通過するたびに新しいL2ヘッダへ付け替えられます。",
+      },
+      {
+        id: "q-osi-3",
+        question: "`show ip interface brief` で `Status: up` / `Protocol: down` と表示された場合、主にどの層の問題を疑いますか？",
+        choices: ["L7 アプリケーション層", "L2 データリンク層", "L5 セッション層", "電源ケーブル未接続 (L1)"],
+        correctIndex: 1,
+        explanation:
+          "Status は L1 物理状態、Protocol は L2 データリンク状態を表します。Status=up で Protocol=down なら L2 の設定不一致やキープアライブ異常を疑います。",
+      },
+      {
+        id: "q-osi-4",
+        question: "送信側で上位データに TCP/IP/Ethernet の各ヘッダを順番に付与していく処理を何と呼びますか？",
+        choices: ["フラグメンテーション", "カプセル化", "ルーティング", "ブロードキャスト"],
+        correctIndex: 1,
+        explanation:
+          "送信時に各層の制御情報（ヘッダ）を順に包んでいく処理を「カプセル化」、受信時に外していく処理を「非カプセル化」と呼びます。",
       },
     ],
   },
@@ -431,6 +468,22 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         explanation:
           "問い合わせ時は相手MACが不明なためブロードキャスト、応答時は送信元MACが分かるためユニキャストで返答します。",
       },
+      {
+        id: "q-ipmac-3",
+        question: "IPv4 アドレスと MAC アドレスのビット長（桁数）の正しい組み合わせはどれですか？",
+        choices: ["IPv4: 32bit / MAC: 48bit", "IPv4: 48bit / MAC: 32bit", "IPv4: 64bit / MAC: 128bit", "IPv4: 16bit / MAC: 32bit"],
+        correctIndex: 0,
+        explanation:
+          "IPv4 は 32bit（8bit×4）、MAC アドレスは 48bit（16進数12桁）で構成されます。",
+      },
+      {
+        id: "q-ipmac-4",
+        question: "スイッチが管理する MAC アドレステーブルは何と何を紐づけて記録していますか？",
+        choices: ["IPアドレス と ホスト名", "MACアドレス と スイッチの物理ポート番号", "ポート番号 と プロトコル名", "MACアドレス と サブネットマスク"],
+        correctIndex: 1,
+        explanation:
+          "ARP テーブルは「IP ↔ MAC」、スイッチの MAC テーブルは「MAC ↔ 物理ポート（およびVLAN）」を紐づけます。",
+      },
     ],
   },
   {
@@ -565,6 +618,22 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         explanation:
           "/27 は最大 30 台で不足します。/26 は 2^6 - 2 = 62 台を収容できる最小のプレフィックス長です。",
       },
+      {
+        id: "q-sub-3",
+        question: "サブネットマスク `255.255.255.252` (/30) のサブネットで利用可能なホストIPアドレス数は何個ですか？",
+        choices: ["2個", "4個", "6個", "14個"],
+        correctIndex: 0,
+        explanation:
+          "/30 はホスト部が 2bit のため 2^2 - 2 = 2 個のホストアドレスが使え、ルータ間 P2P 接続で定番です。",
+      },
+      {
+        id: "q-sub-4",
+        question: "`192.168.10.0/25` のブロードキャストアドレスはどれですか？",
+        choices: ["192.168.10.63", "192.168.10.127", "192.168.10.128", "192.168.10.255"],
+        correctIndex: 1,
+        explanation:
+          "/25 のブロックサイズは 128 です。先頭サブネットは .0〜.127 となるため、ブロードキャストアドレスは 192.168.10.127 です。",
+      },
     ],
   },
   {
@@ -696,6 +765,27 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         explanation:
           "DHCP (UDP 67/68) と TFTP (UDP 69) は軽量な UDP を使用します。SSH/HTTPS/HTTP/Telnet/SMTP は TCP です。",
       },
+      {
+        id: "q-tcp-3",
+        question: "クライアントが送信した TCP SYN に対してサーバが即座に `RST, ACK` を返した場合、最も可能性が高い原因はどれですか？",
+        choices: [
+          "サーバ側で対象ポートの待ち受け (LISTEN) サービスが起動していない",
+          "LANケーブルが物理的に抜けている",
+          "DNS 名前解決に失敗している",
+          "ウィンドウサイズが最大値に達した",
+        ],
+        correctIndex: 0,
+        explanation:
+          "到達性はあるものの宛先ポートが開いていない場合、OS は即座に RST, ACK を返して Connection Refused になります。",
+      },
+      {
+        id: "q-tcp-4",
+        question: "HTTPS と SSH に割り当てられている標準ウェルノウンポート番号の正しい組み合わせはどれですか？",
+        choices: ["HTTPS: 80 / SSH: 23", "HTTPS: 443 / SSH: 22", "HTTPS: 443 / SSH: 25", "HTTPS: 8080 / SSH: 53"],
+        correctIndex: 1,
+        explanation:
+          "HTTPS は TCP 443、SSH は TCP 22 です（80=HTTP, 23=Telnet, 25=SMTP, 53=DNS）。",
+      },
     ],
   },
   {
@@ -820,6 +910,22 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         correctIndex: 2,
         explanation:
           "NXDOMAIN (Non-Existent Domain) は「存在しないドメイン名である」と DNS サーバが返答したことを示します。",
+      },
+      {
+        id: "q-dns-3",
+        question: "ホスト名に対して IPv6 アドレスを紐づける DNS レコードタイプはどれですか？",
+        choices: ["A", "AAAA", "CNAME", "MX"],
+        correctIndex: 1,
+        explanation:
+          "IPv4 は A レコード、IPv6 (128bit = 32bitの4倍) は AAAA レコードを使用します。",
+      },
+      {
+        id: "q-dns-4",
+        question: "ブラウザで `https://...` に接続する際、TCP 3ウェイハンドシェイク完了の直後に行われる処理はどれですか？",
+        choices: ["DHCP Discover", "TLS ハンドシェイク（証明書検証と鍵交換）", "OSPF ネイバー確立", "ARP ブロードキャスト"],
+        correctIndex: 1,
+        explanation:
+          "HTTPS では TCP 接続確立後に TLS ハンドシェイクで暗号化通信路を確立し、その上で HTTP リクエストを送ります。",
       },
     ],
   },

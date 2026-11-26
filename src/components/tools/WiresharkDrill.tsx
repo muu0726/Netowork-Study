@@ -25,6 +25,8 @@ const PROTOCOL_BADGE: Record<CapturePacket["protocol"], BadgeVariant> = {
   DNS: "violet",
   ICMP: "emerald",
   HTTP: "slate",
+  TLS: "rose",
+  OSPF: "amber",
 };
 
 function WiresharkCaseSession({

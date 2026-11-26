@@ -110,6 +110,19 @@ export interface HsrpGroupConfig {
   lastRole?: "Active" | "Standby";
 }
 
+export interface PortSecurityConfig {
+  enabled: boolean;
+  maxMac: number;
+  violation: "shutdown" | "restrict" | "protect";
+  errDisabled?: boolean;
+  learnedMacs?: string[];
+}
+
+export interface Ipv6StaticRoute {
+  prefix: string;
+  nextHop: string;
+}
+
 export type StpPortRole = "Root" | "Desg" | "Altn";
 export type StpPortState = "FWD" | "BLK";
 
@@ -139,6 +152,10 @@ export interface NetworkInterface {
   natRole?: NatRole;
   ospfCost?: number;
   hsrpGroups?: Record<number, HsrpGroupConfig>;
+  channelGroup?: number;
+  channelMode?: "active" | "passive" | "on";
+  portSecurity?: PortSecurityConfig;
+  ipv6Address?: string;
 }
 
 export interface VlanEntry {
@@ -195,6 +212,9 @@ export interface NetworkDevice {
   ospf?: OspfConfig;
   stpPriorities?: Record<number, number>;
   stpBaseMac?: string;
+  ipv6UnicastRouting?: boolean;
+  ipv6DefaultGateway?: string;
+  ipv6StaticRoutes?: Ipv6StaticRoute[];
   cliState: DeviceCliState;
 }
 
@@ -430,7 +450,50 @@ export type ScenarioGoal =
       testSourceDeviceId: string;
       testTarget: string;
       expectedStandbyDeviceId: string;
+    }
+  | {
+      type: "etherchannel_up";
+      id: string;
+      description: string;
+      deviceId: string;
+      groupId: number;
+      minMembers: number;
+    }
+  | {
+      type: "port_security_ok";
+      id: string;
+      description: string;
+      deviceId: string;
+      interfaceName: string;
+      minMaxMac?: number;
+      requireNotErrDisabled?: boolean;
+    }
+  | {
+      type: "ipv6_interface";
+      id: string;
+      description: string;
+      deviceId: string;
+      interfaceName: string;
+      expectedIpv6: string;
+      expectedAdminUp?: boolean;
+    }
+  | {
+      type: "ipv6_ping";
+      id: string;
+      description: string;
+      sourceDeviceId: string;
+      targetIpv6: string;
     };
+
+export interface IncidentPostmortem {
+  rootCauseQuestion: string;
+  rootCauseOptions: string[];
+  rootCauseCorrectIndex: number;
+  preventionQuestion: string;
+  preventionOptions: string[];
+  preventionCorrectIndex: number;
+  summary: string;
+}
 
 export interface ScenarioSolution {
   deviceId: string;
@@ -450,6 +513,7 @@ export interface ScenarioDefinition {
   hints: [string, string, string];
   solutionCommands: ScenarioSolution[];
   solutionExplanation: string;
+  postmortem?: IncidentPostmortem;
 }
 
 export interface GoalEvaluationResult {

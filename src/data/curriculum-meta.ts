@@ -351,6 +351,30 @@ export const SCENARIOS_META: ScenarioMeta[] = [
     difficulty: "中級",
     summary: "dig / ss -tulpn / systemctl / curl -v を駆使して Web サーバデーモン停止を切り分け・復旧します。",
   },
+  {
+    id: "cli-etherchannel-lacp",
+    title: "EtherChannel (LACP) によるスイッチ間リンクアグリゲーション",
+    category: "lab",
+    stage: "stage-2",
+    difficulty: "中級",
+    summary: "LACP active/passive モードで2本の物理リンクを Port-Channel (Po1) に束ね、帯域と冗長性を高めます。",
+  },
+  {
+    id: "cli-ipv6-basic",
+    title: "IPv6 ルーティング設定とデュアルホスト疎通構築",
+    category: "lab",
+    stage: "stage-2",
+    difficulty: "中級",
+    summary: "ipv6 unicast-routing とインターフェースへのIPv6アドレス設定を行い、異なるIPv6サブネット間の疎通を構築します。",
+  },
+  {
+    id: "ts-port-security-errdisable",
+    title: "「会議室ハブを繋いだ後から通信が完全に途絶えた (err-disabled)」",
+    category: "troubleshoot",
+    stage: "stage-2",
+    difficulty: "中級",
+    summary: "show port-security で違反停止を特定し、最大MAC数変更と shutdown/no shutdown で復旧します。",
+  },
 ];
 
 export interface CloudScenarioMeta {

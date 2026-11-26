@@ -21,6 +21,9 @@ export function LessonQuiz({ lessonId, questions }: LessonQuizProps) {
   const hydrated = useHydrated();
   const bestRecord = useLearningStore((state) => state.quizScores[lessonId]);
   const recordQuizScore = useLearningStore((state) => state.recordQuizScore);
+  const recordQuestionOutcomes = useLearningStore(
+    (state) => state.recordQuestionOutcomes,
+  );
   const markLessonCompleted = useLearningStore(
     (state) => state.markLessonCompleted,
   );
@@ -41,6 +44,12 @@ export function LessonQuiz({ lessonId, questions }: LessonQuizProps) {
     }
     setSubmitted(true);
     recordQuizScore(lessonId, score, questions.length);
+    recordQuestionOutcomes(
+      questions.map((q) => ({
+        questionId: `${lessonId}:${q.id}`,
+        isCorrect: selected[q.id] === q.correctIndex,
+      })),
+    );
     if (questions.length > 0 && score / questions.length >= 0.6) {
       markLessonCompleted(lessonId);
     }

@@ -1,5 +1,10 @@
+import {
+  computeEtherChannelSummary,
+  simulateIpv6Ping,
+} from "./advanced-protocols";
 import { normalizeInterfaceName } from "./cli-engine";
 import { isIpInSubnet } from "./ip-math";
+import { areIpv6Equal } from "./ipv6-math";
 import {
   simulateNslookup,
   simulatePing,
@@ -579,6 +584,111 @@ function evaluateSingleGoal(
           : !standbyPromoted
             ? `${activeDev.hostname} 障害時に ${goal.expectedStandbyDeviceId} が Active へ昇格しませんでした`
             : `フェイルオーバー後の疎通テストに失敗しました (${pingAfter.trace.failureReason ?? "Unreachable"})`,
+      };
+    }
+
+    case "etherchannel_up": {
+      const summary = computeEtherChannelSummary(state, goal.deviceId);
+      const grp = summary.find((g) => g.groupId === goal.groupId);
+      const bundled = grp?.members.filter((m) => m.flag === "P").length ?? 0;
+      const passed = Boolean(grp && grp.status === "SU" && bundled >= goal.minMembers);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `Port-Channel ${goal.groupId} (SU) が ${bundled} 本のリンクで稼働中です`
+          : `Port-Channel ${goal.groupId} の稼働メンバー数: ${bundled} / ${goal.minMembers}（show etherchannel summary で確認）`,
+      };
+    }
+
+    case "port_security_ok": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const normIf =
+        normalizeInterfaceName(goal.interfaceName, device.interfaces) ??
+        goal.interfaceName;
+      const iface = device.interfaces[normIf];
+      if (!iface) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `インターフェース "${goal.interfaceName}" が見つかりません`,
+        };
+      }
+      const ps = iface.portSecurity;
+      const enabledOk = Boolean(ps?.enabled);
+      const notErrOk =
+        goal.requireNotErrDisabled === false || !ps?.errDisabled;
+      const maxMacOk =
+        goal.minMaxMac === undefined || (ps?.maxMac ?? 0) >= goal.minMaxMac;
+      const adminOk = iface.adminUp;
+      const passed = enabledOk && notErrOk && maxMacOk && adminOk;
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${device.hostname} ${normIf} の Port Security が正常復旧しています (max=${ps?.maxMac})`
+          : `${device.hostname} ${normIf}: errDisabled=${Boolean(ps?.errDisabled)}, adminUp=${adminOk}, maxMac=${ps?.maxMac ?? 0}`,
+      };
+    }
+
+    case "ipv6_interface": {
+      const device = state.devices[goal.deviceId];
+      if (!device) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `デバイス "${goal.deviceId}" が見つかりません`,
+        };
+      }
+      const normIf =
+        normalizeInterfaceName(goal.interfaceName, device.interfaces) ??
+        goal.interfaceName;
+      const iface = device.interfaces[normIf];
+      if (!iface) {
+        return {
+          goalId: goal.id,
+          description: goal.description,
+          passed: false,
+          detail: `インターフェース "${goal.interfaceName}" が見つかりません`,
+        };
+      }
+      const addrOk = Boolean(
+        iface.ipv6Address && areIpv6Equal(iface.ipv6Address, goal.expectedIpv6),
+      );
+      const adminOk =
+        goal.expectedAdminUp === undefined || iface.adminUp === goal.expectedAdminUp;
+      const passed = addrOk && adminOk;
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed,
+        detail: passed
+          ? `${device.hostname} ${normIf} に IPv6 ${iface.ipv6Address} が設定・有効化されています`
+          : `${device.hostname} ${normIf} IPv6=${iface.ipv6Address ?? "未設定"} (期待: ${goal.expectedIpv6}), adminUp=${iface.adminUp}`,
+      };
+    }
+
+    case "ipv6_ping": {
+      const sim = simulateIpv6Ping(state, goal.sourceDeviceId, goal.targetIpv6);
+      return {
+        goalId: goal.id,
+        description: goal.description,
+        passed: sim.trace.success,
+        detail: sim.trace.success
+          ? `${goal.targetIpv6} への往復 IPv6 Ping 成功`
+          : `${sim.trace.failureReason ?? "Failed"}: ${sim.trace.failureMessage ?? "IPv6疎通できません"}`,
       };
     }
   }

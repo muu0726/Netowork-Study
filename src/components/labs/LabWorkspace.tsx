@@ -6,6 +6,8 @@ import {
   BookMarked,
   CheckCircle2,
   Circle,
+  Clock,
+  Compass,
   GitCompare,
   History,
   Lightbulb,
@@ -108,7 +110,31 @@ function getDefaultDeviceId(scenario: ScenarioDefinition): string {
 interface ScenarioSessionProps {
   scenario: ScenarioDefinition;
   category: "lab" | "troubleshoot";
-  onCompleted: (scenarioId: string) => void;
+  onCompleted: (
+    scenarioId: string,
+    elapsedSeconds: number,
+    commandsCount: number,
+  ) => void;
+}
+
+const CLI_MODE_HELP: Record<string, string> = {
+  user: "ユーザーEXECモード (>) です。状態確認 (show) はできますが、設定変更には `enable` で特権モード (#) へ移ります。",
+  privileged: "特権EXECモード (#) です。`show` / `ping` の確認や、`configure terminal` で設定モードへ移れます。",
+  config: "グローバル設定モード `(config)#` です。`interface <名前>` や `ip route` / `router ospf` 等を入力できます。",
+  "config-if": "インターフェース設定モード `(config-if)#` です。IP設定・`no shutdown`・`switchport`・`channel-group` 等を設定できます。",
+  "config-subif": "サブインターフェース設定モード `(config-subif)#` です。`encapsulation dot1Q <vlan>` や IP を設定します。",
+  "config-vlan": "VLAN設定モード `(config-vlan)#` です。`name <名前>` 等を設定できます。",
+  "config-std-nacl": "名前付き標準ACL設定モードです。`permit` / `deny` ルールを入力します。",
+  "config-ext-nacl": "名前付き拡張ACL設定モードです。`permit tcp ...` 等のルールを入力します。",
+  "dhcp-config": "DHCPプール設定モードです。`network` / `default-router` / `dns-server` を設定します。",
+  "config-router": "OSPF設定モードです。`router-id` や `network ... area ...` を設定します。",
+  host: "エンドホスト端末 ($) です。`ipconfig` / `ping` / `nslookup` / `curl` / `systemctl` 等の確認コマンドが使えます。",
+};
+
+function formatElapsedSeconds(totalSec: number): string {
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 function ScenarioSession({
@@ -157,9 +183,33 @@ function ScenarioSession({
     "topology",
   );
   const [lineSeq, setLineSeq] = useState(0);
+  const [guideMode, setGuideMode] = useState<boolean>(
+    () => scenario.difficulty === "初級",
+  );
+  const [showSampleCommands, setShowSampleCommands] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [pmRootChoice, setPmRootChoice] = useState<number | null>(null);
+  const [pmPrevChoice, setPmPrevChoice] = useState<number | null>(null);
+  const [pmSubmitted, setPmSubmitted] = useState(false);
+
+  const hydrated = useHydrated();
+  const incidentBest = useLearningStore((state) =>
+    hydrated ? state.incidentRecords?.[scenario.id] : undefined,
+  );
 
   const activeSnapshot = snapshots[currentStepIndex] ?? snapshots[0];
   const networkState = activeSnapshot.state;
+  const evaluation = evaluateScenario(networkState, scenario);
+
+  useEffect(() => {
+    if (evaluation.passed) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [evaluation.passed]);
 
   useEffect(() => {
     if (!isReplaying) {
@@ -182,7 +232,6 @@ function ScenarioSession({
     networkState.devices[selectedDeviceId] ??
     Object.values(networkState.devices)[0];
 
-  const evaluation = evaluateScenario(networkState, scenario);
   const configDiff = computeNetworkConfigDiff(
     scenario.initialState,
     networkState,
@@ -247,6 +296,11 @@ function ScenarioSession({
     setTraceRunId(0);
     setRevealedHints(0);
     setShowHints(false);
+    setElapsedSeconds(0);
+    setShowSampleCommands(false);
+    setPmRootChoice(null);
+    setPmPrevChoice(null);
+    setPmSubmitted(false);
   };
 
   const handleSelectDevice = (deviceId: string) => {
@@ -299,9 +353,11 @@ function ScenarioSession({
     setLineSeq(baseSeq + 10);
     setIsReplaying(false);
 
+    let nextStepCount = snapshots.length - 1;
     if (trimmed.length > 0) {
       const baseSnapshots = snapshots.slice(0, currentStepIndex + 1);
       const nextStepIdx = baseSnapshots.length;
+      nextStepCount = nextStepIdx;
       setSnapshots([
         ...baseSnapshots,
         {
@@ -341,7 +397,7 @@ function ScenarioSession({
 
     const nextEval = evaluateScenario(result.nextState, scenario);
     if (nextEval.passed) {
-      onCompleted(scenario.id);
+      onCompleted(scenario.id, elapsedSeconds, nextStepCount);
     }
   };
 
@@ -373,6 +429,16 @@ function ScenarioSession({
               <Badge variant={evaluation.passed ? "emerald" : "cyan"}>
                 達成状況: {evaluation.passedCount} / {evaluation.totalCount}
               </Badge>
+              <Badge variant="slate">
+                <Clock className="h-3 w-3" />
+                {formatElapsedSeconds(elapsedSeconds)} • {snapshots.length - 1}手
+              </Badge>
+              {incidentBest && (
+                <Badge variant="emerald">
+                  自己ベスト: {formatElapsedSeconds(incidentBest.bestSeconds)} /{" "}
+                  {incidentBest.bestCommands}手
+                </Badge>
+              )}
             </div>
             <h2 className="text-xl font-bold text-slate-50">
               {scenario.title}
@@ -419,6 +485,20 @@ function ScenarioSession({
               <span>
                 設定Diff (+{configDiff.totalAdded}/-{configDiff.totalRemoved})
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setGuideMode((prev) => !prev)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                guideMode
+                  ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-200"
+                  : "border-slate-700 bg-[#070b14] text-slate-300 hover:border-cyan-500/50",
+              )}
+            >
+              <Compass className="h-3.5 w-3.5 text-cyan-400" />
+              <span>ガイド: {guideMode ? "ON" : "OFF"}</span>
             </button>
 
             <button
@@ -645,6 +725,80 @@ function ScenarioSession({
         </Card>
       )}
 
+      {/* Guided Step-by-Step Companion */}
+      {guideMode && !evaluation.passed && (
+        <Card className="space-y-3 border-cyan-500/35 bg-cyan-500/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Compass className="h-4 w-4 text-cyan-400" />
+              <h3 className="text-xs font-bold text-cyan-200">
+                ステップ伴走ガイド（未経験サポート）
+              </h3>
+              <Badge variant="cyan">
+                選択中: {selectedDevice.hostname} ({selectedDevice.cliState.mode})
+              </Badge>
+            </div>
+
+            {scenario.solutionCommands[0] &&
+              scenario.solutionCommands[0].deviceId !== selectedDevice.id && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDevice(scenario.solutionCommands[0].deviceId)
+                  }
+                  className="rounded-md border border-cyan-500/50 bg-cyan-500/15 px-2.5 py-1 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25"
+                >
+                  設定対象 {scenario.solutionCommands[0].hostname} へ切替
+                </button>
+              )}
+          </div>
+
+          <p className="text-xs leading-relaxed text-slate-200">
+            {CLI_MODE_HELP[selectedDevice.cliState.mode] ??
+              "選択中の機器へコマンドを入力してください。"}
+          </p>
+
+          {(() => {
+            const nextGoal = evaluation.results.find((g) => !g.passed);
+            return nextGoal ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-[#05080f] px-3 py-2 text-xs">
+                <div>
+                  <span className="font-mono text-[10px] font-semibold text-amber-300">
+                    NEXT GOAL:{" "}
+                  </span>
+                  <span className="text-slate-200">{nextGoal.description}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSampleCommands((prev) => !prev)}
+                  className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-cyan-500/50"
+                >
+                  {showSampleCommands ? "入力例を隠す" : "コマンド入力例を見る"}
+                </button>
+              </div>
+            ) : null;
+          })()}
+
+          {showSampleCommands && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {scenario.solutionCommands.map((sol) => (
+                <div
+                  key={`guide-${sol.deviceId}`}
+                  className="rounded-lg border border-slate-800 bg-[#05080f] p-2.5"
+                >
+                  <p className="mb-1 font-mono text-[11px] font-semibold text-cyan-300">
+                    {sol.hostname} 手順例
+                  </p>
+                  <pre className="overflow-x-auto font-mono text-[11px] text-slate-300">
+                    {sol.commands.join("\n")}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Progressive 3-Stage Hints */}
       {showHints && (
         <HintsPanel
@@ -710,6 +864,135 @@ function ScenarioSession({
               </div>
             ))}
           </div>
+
+          {category === "troubleshoot" && (
+            <div className="mt-4 space-y-3 rounded-xl border border-amber-500/35 bg-[#05080f]/90 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-200">
+                  ミニ障害報告書（ポストモーテム振り返り）
+                </h4>
+                <Badge variant="amber">
+                  クリア記録: {formatElapsedSeconds(elapsedSeconds)} /{" "}
+                  {snapshots.length - 1} コマンド
+                </Badge>
+              </div>
+
+              {(() => {
+                const pm = scenario.postmortem ?? {
+                  rootCauseQuestion:
+                    "今回のインシデントの直接的な技術原因を説明しているものはどれですか？",
+                  rootCauseOptions: [
+                    scenario.solutionExplanation,
+                    "データセンター全体の電源供給が完全に停止していたため",
+                    "ブラウザのブックマークURLが古かったため",
+                  ],
+                  rootCauseCorrectIndex: 0,
+                  preventionQuestion:
+                    "同種の障害の再発防止・早期検知として実務で有効なアクションはどれですか？",
+                  preventionOptions: [
+                    "設定変更後の疎通・show コマンド確認チェックリストと変更前Diffレビューを標準化する",
+                    "すべての監視アラート通知を無効化して対応工数を減らす",
+                    "障害が起きた機器の設定確認を行わず毎日再起動する",
+                  ],
+                  preventionCorrectIndex: 0,
+                  summary:
+                    "原因特定→設定修正→疎通再確認→再発防止策の記録までを一連で回すのが現場のSRE/ネットワーク運用です。",
+                };
+                const pmAllSelected =
+                  pmRootChoice !== null && pmPrevChoice !== null;
+                const pmOk =
+                  pmRootChoice === pm.rootCauseCorrectIndex &&
+                  pmPrevChoice === pm.preventionCorrectIndex;
+
+                return (
+                  <div className="space-y-3 text-xs">
+                    <div className="space-y-1.5">
+                      <p className="font-semibold text-slate-100">
+                        1. {pm.rootCauseQuestion}
+                      </p>
+                      <div className="grid gap-1.5">
+                        {pm.rootCauseOptions.map((opt, idx) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            disabled={pmSubmitted}
+                            onClick={() => setPmRootChoice(idx)}
+                            className={cn(
+                              "rounded-lg border px-3 py-2 text-left transition-colors",
+                              !pmSubmitted && pmRootChoice === idx
+                                ? "border-cyan-500 bg-cyan-500/15 text-cyan-100"
+                                : !pmSubmitted
+                                  ? "border-slate-800 bg-[#080d19] text-slate-300 hover:border-slate-700"
+                                  : idx === pm.rootCauseCorrectIndex
+                                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-100"
+                                    : pmRootChoice === idx
+                                      ? "border-rose-500 bg-rose-500/15 text-rose-200"
+                                      : "border-slate-800/60 bg-[#060a14] text-slate-500",
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="font-semibold text-slate-100">
+                        2. {pm.preventionQuestion}
+                      </p>
+                      <div className="grid gap-1.5">
+                        {pm.preventionOptions.map((opt, idx) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            disabled={pmSubmitted}
+                            onClick={() => setPmPrevChoice(idx)}
+                            className={cn(
+                              "rounded-lg border px-3 py-2 text-left transition-colors",
+                              !pmSubmitted && pmPrevChoice === idx
+                                ? "border-cyan-500 bg-cyan-500/15 text-cyan-100"
+                                : !pmSubmitted
+                                  ? "border-slate-800 bg-[#080d19] text-slate-300 hover:border-slate-700"
+                                  : idx === pm.preventionCorrectIndex
+                                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-100"
+                                    : pmPrevChoice === idx
+                                      ? "border-rose-500 bg-rose-500/15 text-rose-200"
+                                      : "border-slate-800/60 bg-[#060a14] text-slate-500",
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {!pmSubmitted ? (
+                      <button
+                        type="button"
+                        disabled={!pmAllSelected}
+                        onClick={() => setPmSubmitted(true)}
+                        className="rounded-lg bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        報告書を提出して振り返る
+                      </button>
+                    ) : (
+                      <p
+                        className={cn(
+                          "rounded-lg border px-3 py-2",
+                          pmOk
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-200",
+                        )}
+                      >
+                        {pmOk ? "完璧です！ " : "振り返りポイント: "}
+                        {pm.summary}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -811,6 +1094,9 @@ function LabWorkspaceInner({
   const markScenarioCompleted = useLearningStore(
     (state) => state.markScenarioCompleted,
   );
+  const recordIncidentClear = useLearningStore(
+    (state) => state.recordIncidentClear,
+  );
 
   const activeScenario =
     scenarios.find((s) => s.id === activeScenarioId) ?? scenarios[0];
@@ -877,7 +1163,10 @@ function LabWorkspaceInner({
         key={activeScenario.id}
         scenario={activeScenario}
         category={category}
-        onCompleted={markScenarioCompleted}
+        onCompleted={(scenarioId, seconds, commandsCount) => {
+          markScenarioCompleted(scenarioId);
+          recordIncidentClear(scenarioId, seconds, commandsCount);
+        }}
       />
     </div>
   );

@@ -4,6 +4,8 @@ export * from "./ipv6-math";
 export * from "./link-utils";
 export * from "./acl-nat-dhcp";
 export * from "./routing-redundancy";
+export * from "./advanced-protocols";
+export * from "./sandbox-utils";
 export * from "./packet-simulator";
 export * from "./packet-headers";
 export * from "./state-diff";

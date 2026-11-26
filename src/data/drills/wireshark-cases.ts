@@ -16,7 +16,7 @@ export interface CapturePacket {
   time: string;
   source: string;
   destination: string;
-  protocol: "TCP" | "ARP" | "DNS" | "ICMP" | "HTTP";
+  protocol: "TCP" | "ARP" | "DNS" | "ICMP" | "HTTP" | "TLS" | "OSPF";
   length: number;
   info: string;
   severity?: "normal" | "warn" | "error";
@@ -432,5 +432,242 @@ export const WIRESHARK_DRILL_CASES: WiresharkDrillCase[] = [
     correctOptionIndex: 0,
     explanation:
       "No.2 に DNS サーバ (192.168.20.53) からの応答パケットが届いているため、DNS サーバまでの到達性は正常です。Reply code が「No such name (NXDOMAIN)」であり、クライアント側のURLタイポ (intrnaet) または DNS ゾーン側の A レコード登録漏れが原因と特定できます。",
+  },
+  {
+    id: "ws-tls-cert-fail",
+    title: "HTTPS 接続が TLS ハンドシェイク中に Alert で切断される",
+    difficulty: "中級",
+    symptom:
+      "社内ブラウザから `https://portal.corp.local` へアクセスすると TCP 接続までは成功しますが、直後に暗号化通信が切断されます。問題を示すパケットと原因を特定してください。",
+    targetPacketNo: 3,
+    validPacketNos: [3],
+    packets: [
+      {
+        no: 1,
+        time: "0.000000",
+        source: "192.168.10.25",
+        destination: "192.168.50.10",
+        protocol: "TLS",
+        length: 218,
+        info: "Client Hello (SNI=portal.corp.local, TLS 1.3)",
+        severity: "normal",
+        layers: [
+          {
+            name: "Transmission Control Protocol",
+            summary: "Src Port: 52100, Dst Port: 443",
+            fields: [
+              { label: "Source Port", value: "52100" },
+              { label: "Destination Port", value: "443" },
+            ],
+          },
+          {
+            name: "Transport Layer Security",
+            summary: "TLSv1.3 Record Layer: Handshake Protocol: Client Hello",
+            fields: [
+              { label: "Server Name (SNI)", value: "portal.corp.local" },
+              { label: "Supported Version", value: "TLS 1.3" },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  16 03 01 00 d5 01 00 00  d1 03 03 a1 b2 c3 d4 e5  ................",
+        ],
+      },
+      {
+        no: 2,
+        time: "0.003100",
+        source: "192.168.50.10",
+        destination: "192.168.10.25",
+        protocol: "TLS",
+        length: 1240,
+        info: "Server Hello, Certificate (CN=old-portal.corp.local, Expired)",
+        severity: "warn",
+        layers: [
+          {
+            name: "Transport Layer Security",
+            summary: "Certificate SAN=old-portal.corp.local",
+            highlight: "warn",
+            fields: [
+              { label: "Certificate CN/SAN", value: "old-portal.corp.local", abnormal: true },
+              { label: "Validity Not After", value: "2025-01-01 (期限切れ)", abnormal: true },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  16 03 03 04 d0 02 00 00  4d 03 03 11 22 33 44 55  ........M...\"3DU",
+        ],
+      },
+      {
+        no: 3,
+        time: "0.005400",
+        source: "192.168.10.25",
+        destination: "192.168.50.10",
+        protocol: "TLS",
+        length: 61,
+        info: "Alert (Level: Fatal, Description: Certificate Unknown / Expired)",
+        severity: "error",
+        layers: [
+          {
+            name: "Transport Layer Security",
+            summary: "TLS Alert: Fatal, Certificate Expired",
+            highlight: "error",
+            fields: [
+              { label: "Alert Level", value: "Fatal (2)", abnormal: true },
+              { label: "Description", value: "Certificate Expired / Name Mismatch (45)", abnormal: true },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  15 03 03 00 02 02 2d 00  00 00 00 00 00 00 00 00  ......-.........",
+        ],
+      },
+    ],
+    options: [
+      "サーバ証明書のドメイン不一致・有効期限切れによりクライアントが Fatal TLS Alert を送って切断している",
+      "ルータが TCP 443 番ポートの SYN パケットを ACL で破棄している",
+      "DNS 名前解決で NXDOMAIN が返っている",
+      "クライアントとサーバが同一サブネットではないため ARP が失敗している",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "TCP 443 のハンドシェイク後に TLS Client Hello / Server Hello が交換され、No.3 でクライアントから Fatal TLS Alert (Certificate Expired) が出ています。サーバ証明書の SAN 不一致・期限切れを更新することで復旧できます。",
+  },
+  {
+    id: "ws-ospf-hello-mismatch",
+    title: "OSPF ルータ間でネイバーが INIT のまま FULL にならない",
+    difficulty: "実践",
+    symptom:
+      "R1 (10.0.0.1) と R2 (10.0.0.2) 間で OSPF が確立せずルート交換が始まりません。OSPF Hello パケットの差分を確認し原因を特定してください。",
+    targetPacketNo: 2,
+    validPacketNos: [2],
+    packets: [
+      {
+        no: 1,
+        time: "0.000000",
+        source: "10.0.0.1",
+        destination: "224.0.0.5",
+        protocol: "OSPF",
+        length: 78,
+        info: "Hello Packet (Area 0.0.0.0, Hello=10s, Dead=40s)",
+        severity: "normal",
+        layers: [
+          {
+            name: "Open Shortest Path First",
+            summary: "OSPF Header + Hello (Area 0.0.0.0)",
+            fields: [
+              { label: "Router ID", value: "1.1.1.1" },
+              { label: "Area ID", value: "0.0.0.0 (Area 0)" },
+              { label: "Hello Interval", value: "10 sec" },
+              { label: "Dead Interval", value: "40 sec" },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  02 01 00 2c 01 01 01 01  00 00 00 00 aa bb 00 00  ...,............",
+        ],
+      },
+      {
+        no: 2,
+        time: "0.420000",
+        source: "10.0.0.2",
+        destination: "224.0.0.5",
+        protocol: "OSPF",
+        length: 78,
+        info: "Hello Packet (Area 0.0.0.1, Hello=10s, Dead=40s) [Area Mismatch]",
+        severity: "error",
+        layers: [
+          {
+            name: "Open Shortest Path First",
+            summary: "OSPF Header + Hello (Area 0.0.0.1)",
+            highlight: "error",
+            fields: [
+              { label: "Router ID", value: "2.2.2.2" },
+              { label: "Area ID", value: "0.0.0.1 (Area 1 — 不一致!)", abnormal: true },
+              { label: "Hello Interval", value: "10 sec" },
+              { label: "Dead Interval", value: "40 sec" },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  02 01 00 2c 02 02 02 02  00 00 00 01 cc dd 00 00  ...,............",
+        ],
+      },
+    ],
+    options: [
+      "対向ルータ R2 の OSPF Area ID が `0.0.0.1 (Area 1)` になっており、R1 の `Area 0` と一致していない",
+      "宛先IP `224.0.0.5` がマルチキャストアドレスではなくブロードキャストである",
+      "Router ID が 1.1.1.1 と 2.2.2.2 で重複している",
+      "OSPF の Hello Interval が 10 秒で一致しているため通信できない",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "OSPF ネイバーを確立するには、同一リンク上のルータ間で「Area ID」「Hello/Deadタイマ」「サブネットマスク」「認証設定」がすべて一致している必要があります。No.2 の Area ID が Area 1 になっており不一致です。",
+  },
+  {
+    id: "ws-tcp-retrans-mtu",
+    title: "Ping は通るのに大容量 HTTP ダウンロードだけが途中で止まる",
+    difficulty: "実践",
+    symptom:
+      "VPN 越しの社内アプリで小さなページは開くのに、大きな JSON/ファイル取得で必ずハングアップします。エラーパケットと原因を特定してください。",
+    targetPacketNo: 2,
+    validPacketNos: [2],
+    packets: [
+      {
+        no: 1,
+        time: "0.000000",
+        source: "192.168.10.20",
+        destination: "172.16.10.50",
+        protocol: "HTTP",
+        length: 1514,
+        info: "TCP Segment / HTTP Payload (Len=1460, DF=1)",
+        severity: "normal",
+        layers: [
+          {
+            name: "Internet Protocol Version 4",
+            summary: "Total Length: 1500, Flags: Don't Fragment (DF)",
+            fields: [
+              { label: "Total Length", value: "1500 bytes" },
+              { label: "Don't Fragment (DF)", value: "Set (1)" },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  45 00 05 dc 11 22 40 00  40 06 a0 b1 c0 a8 0a 14  E....\"@.@.......",
+        ],
+      },
+      {
+        no: 2,
+        time: "0.004200",
+        source: "10.255.0.1",
+        destination: "192.168.10.20",
+        protocol: "ICMP",
+        length: 70,
+        info: "Destination unreachable (Fragmentation needed, Next-hop MTU=1400)",
+        severity: "error",
+        layers: [
+          {
+            name: "Internet Control Message Protocol",
+            summary: "Type: 3, Code: 4 (Fragmentation needed and DF set)",
+            highlight: "error",
+            fields: [
+              { label: "Type / Code", value: "3 / 4 (Fragmentation Needed)", abnormal: true },
+              { label: "MTU of next hop", value: "1400 bytes", abnormal: true },
+            ],
+          },
+        ],
+        hexDump: [
+          "0000  03 04 12 34 00 00 05 78  45 00 05 dc 11 22 40 00  ...4...xE....\"@.",
+        ],
+      },
+    ],
+    options: [
+      "経路途中の MTU が 1400 と小さく、DF ビット付きの 1500 バイトパケットが破棄されている（Path MTU / MSS 超過）",
+      "ポート 80 番の HTTP サービスがサーバ上で停止している",
+      "クライアント側の MAC アドレスが重複している",
+      "ICMP Echo Reply が返らないため DNS 解決が止まっている",
+    ],
+    correctOptionIndex: 0,
+    explanation:
+      "VPN トンネル等を通るとカプセル化ヘッダ分のオーバーヘッドで実効 MTU が下がります（例: 1400）。DF (Don't Fragment) ビットが立った大きなパケットは中継ルータで破棄され、ICMP Type 3 Code 4 (Fragmentation Needed) が返ります。`ip tcp adjust-mss` 等の調整が必要です。",
   },
 ];

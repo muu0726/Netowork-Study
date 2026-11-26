@@ -1,18 +1,27 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { useLearningStore } from "@/store/useLearningStore";
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    if (pathname && pathname !== "/") {
+      useLearningStore.getState().setLastVisitedPath(pathname);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const handleGlobalShortcut = (event: KeyboardEvent) => {

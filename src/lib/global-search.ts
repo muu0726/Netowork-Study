@@ -109,6 +109,17 @@ export function buildGlobalSearchIndex(): GlobalSearchItem[] {
   }
 
   items.push({
+    id: "lab:sandbox",
+    kind: "lab",
+    badge: "SANDBOX",
+    title: "フリービルド・サンドボックス (自由設計ラボ)",
+    subtitle:
+      "ルータ・スイッチ・PC・サーバを自由に配置・結線し、CLI設定やURL共有ができます。",
+    href: "/labs/sandbox",
+    keywords: ["sandbox", "free", "自由設計", "サンドボックス", "構成作成"],
+  });
+
+  items.push({
     id: "exam:diagnostic",
     kind: "exam",
     badge: "MOCK EXAM",
