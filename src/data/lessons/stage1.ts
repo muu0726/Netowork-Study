@@ -11,8 +11,8 @@ export const STAGE1_LESSONS: LessonArticle[] = [
     estimatedMinutes: 10,
     diagramVariant: "lan-wan",
     relatedHref: {
-      href: "/labs/cli",
-      label: "CLI構築ラボでルータ間通信を体験する",
+      href: "/labs/cli?scenario=cli-first-steps",
+      label: "超入門CLIラボでルータとの疎通を体験する",
     },
     glossary: [
       {
@@ -42,6 +42,41 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         detail:
           "宛先 IP アドレスとルーティングテーブルに基づき、別のネットワークへの最適な経路を選びます。",
         layer: "L3",
+      },
+      {
+        term: "デフォルトゲートウェイ",
+        shortDef: "別のネットワークへ出る際の「玄関口」となるルータのIP",
+        detail:
+          "PCが自分のLANの外（他拠点やインターネット）へ通信するとき、最初にデータを渡す出口のルータアドレスです。",
+        layer: "L3",
+      },
+      {
+        term: "サブネット",
+        shortDef: "ルータやスイッチで区切られた1つのネットワーク単位",
+        detail:
+          "同じLANに所属する機器のグループのこと。同じサブネット同士ならルータを通さず直接会話できます。",
+        layer: "L3",
+      },
+      {
+        term: "IPアドレス",
+        shortDef: "ネットワーク上の機器に割り当てる論理的な住所",
+        detail:
+          "192.168.10.1 のような数字の並びで、どのネットワークのどの機器かを識別します。",
+        layer: "L3",
+      },
+      {
+        term: "MACアドレス",
+        shortDef: "LANカードなどの機器に工場出荷時から刻まれた固有番号",
+        detail:
+          "同じLANの中で隣の機器へデータを届けるときに使われる物理的な識別番号です。",
+        layer: "L2",
+      },
+      {
+        term: "フレーム",
+        shortDef: "L2（LAN内）でやり取りされるデータの単位",
+        detail:
+          "宛先・送信元のMACアドレスなどをヘッダとして付けた、LAN内の通信パッケージです。",
+        layer: "L2",
       },
     ],
     beginnerMode: {
@@ -142,6 +177,48 @@ export const STAGE1_LESSONS: LessonArticle[] = [
           "Protocol Data Unit。L4=セグメント、L3=パケット、L2=フレーム、L1=ビットという名称の使い分けが重要です。",
         layer: "L1–L4",
       },
+      {
+        term: "ポート番号",
+        shortDef: "1台のPC内で「どのアプリ宛てか」を示す番号",
+        detail:
+          "Webブラウザやメールなど複数アプリが同時に通信しても、ポート番号 (80, 443 等) で正しく振り分けられます。",
+        layer: "L4",
+      },
+      {
+        term: "IPアドレス",
+        shortDef: "最終目的地まで届けるためのネットワーク上の住所",
+        detail:
+          "ルータが経路を判断するときに参照する論理アドレスです（例: 192.168.10.1）。",
+        layer: "L3",
+      },
+      {
+        term: "MACアドレス",
+        shortDef: "同じLAN内の隣の機器へ渡すための固有ハードウェア番号",
+        detail:
+          "Ethernet フレームに付与され、ケーブルで直結された同じLAN内の機器を識別します。",
+        layer: "L2",
+      },
+      {
+        term: "Ethernet",
+        shortDef: "有線LANで広く使われるL1/L2の通信規格",
+        detail:
+          "LANケーブルや光ファイバ上で MACアドレス を使ってフレームを送受信する標準規格です。",
+        layer: "L1–L2",
+      },
+      {
+        term: "TCP",
+        shortDef: "再送や順序確認を行い確実に届ける通信方式",
+        detail:
+          "Web閲覧やファイル転送など、データが欠けては困る通信で使われます。",
+        layer: "L4",
+      },
+      {
+        term: "UDP",
+        shortDef: "確認を省いて高速・低遅延にデータを送る通信方式",
+        detail:
+          "音声通話、動画配信、DNS問い合わせなど速さを重視する通信で使われます。",
+        layer: "L4",
+      },
     ],
     beginnerMode: {
       analogyTitle: "手紙を「封筒」に入れて「段ボール」に詰めるリレー",
@@ -222,7 +299,7 @@ export const STAGE1_LESSONS: LessonArticle[] = [
     estimatedMinutes: 15,
     diagramVariant: "ip-mac",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=wireshark",
       label: "Wireshark風ドリルでARP失敗パケットを見る",
     },
     glossary: [
@@ -245,6 +322,41 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         shortDef: "IPアドレスからMACアドレスを調べる仕組み",
         detail:
           "Address Resolution Protocol。同一LAN内にブロードキャストで『このIPのMACは誰？』と尋ね、ユニキャストで応答を受け取り ARPテーブル にキャッシュします。",
+        layer: "L2/L3",
+      },
+      {
+        term: "デフォルトゲートウェイ",
+        shortDef: "別ネットワークへ通信するときの出口となるルータIP",
+        detail:
+          "宛先が別サブネットのとき、PCは直接相手のMACを調べられないため、まずデフォルトゲートウェイのMACをARPで調べます。",
+        layer: "L3",
+      },
+      {
+        term: "サブネット",
+        shortDef: "同じLANとして区切られたIPアドレスの範囲",
+        detail:
+          "ARPの問い合わせは同じサブネット内にだけ届くため、サブネット外へはルータが中継します。",
+        layer: "L3",
+      },
+      {
+        term: "ブロードキャスト",
+        shortDef: "同じLAN内のすべての機器へ一斉に送信する通信",
+        detail:
+          "宛先MACアドレスに FF:FF:FF:FF:FF:FF を指定し、LAN内の全機器に『誰宛てか』を問いかけます。",
+        layer: "L2",
+      },
+      {
+        term: "ユニキャスト",
+        shortDef: "特定の1台の機器だけに向けて送信する1対1の通信",
+        detail:
+          "ARPの返答(Reply)や通常のWeb通信など、相手が特定できているときに使います。",
+        layer: "L2/L3",
+      },
+      {
+        term: "ARPテーブル",
+        shortDef: "調べた「IPアドレス ↔ MACアドレス」の対応表キャッシュ",
+        detail:
+          "毎回ブロードキャストしなくて済むよう、各機器のメモリに一定時間記憶される一覧表です（`show arp` 等で確認できます）。",
         layer: "L2/L3",
       },
     ],
@@ -331,7 +443,7 @@ export const STAGE1_LESSONS: LessonArticle[] = [
     estimatedMinutes: 20,
     diagramVariant: "subnetting",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=subnet",
       label: "サブネット計算機＆ランダム出題ドリルを開く",
     },
     glossary: [
@@ -354,6 +466,34 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         shortDef: "同一サブネット内の全ホストへ一斉送信するための予約アドレス",
         detail:
           "ホスト部のビットをすべて 1 にしたアドレス。通常ホストに割り当てることはできません。",
+        layer: "L3",
+      },
+      {
+        term: "IPアドレス",
+        shortDef: "32bit（0と1が32桁）で表されるIPv4の論理住所",
+        detail:
+          "人間が読みやすいように8bitずつ4つに区切って10進数で表記します。",
+        layer: "L3",
+      },
+      {
+        term: "ネットワークアドレス",
+        shortDef: "サブネット自体を表す先頭の代表アドレス（ホスト部全0）",
+        detail:
+          "町全体の表札にあたるアドレスで、ルータの経路表にもこのアドレスが登録されます。PCに割り当てることはできません。",
+        layer: "L3",
+      },
+      {
+        term: "プレフィックス長",
+        shortDef: "ネットワーク部が先頭から何ビットあるかを示す `/24` などの数字",
+        detail:
+          "`/24` は先頭24bitがネットワーク部（255.255.255.0）、残り8bitがホスト部であることを表します。",
+        layer: "L3",
+      },
+      {
+        term: "オクテット",
+        shortDef: "IPv4アドレスをドットで区切った8bitごとの塊",
+        detail:
+          "32bit を 8bit × 4 個に分けたそれぞれを第1〜第4オクテットと呼び、各値は 0〜255 になります。",
         layer: "L3",
       },
     ],
@@ -437,7 +577,7 @@ export const STAGE1_LESSONS: LessonArticle[] = [
     estimatedMinutes: 15,
     diagramVariant: "tcp-udp",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=wireshark",
       label: "パケット解析ドリルで TCP RST を調査する",
     },
     glossary: [
@@ -460,6 +600,27 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         shortDef: "1台の機器内の「どのアプリか」を識別する16bit番号 (0〜65535)",
         detail:
           "0〜1023 はウェルノウンポート（HTTP:80, HTTPS:443, SSH:22, DNS:53 等）として標準予約されています。",
+        layer: "L4",
+      },
+      {
+        term: "3ウェイハンドシェイク",
+        shortDef: "TCP通信を開始する前に行う SYN → SYN/ACK → ACK の3往復確認",
+        detail:
+          "双方が送受信できる状態にあることと初期シーケンス番号を合意してからデータ転送を始めます。",
+        layer: "L4",
+      },
+      {
+        term: "エフェメラルポート",
+        shortDef: "クライアントが一時的に自動割り当てする送信元ポート番号",
+        detail:
+          "PCのブラウザがサーバの443番へ繋ぐ際、自分側の受け口として動的に確保する番号（例: 49152〜65535等）です。",
+        layer: "L4",
+      },
+      {
+        term: "RST",
+        shortDef: "TCP接続を即座に拒否または強制切断するフラグ (Reset)",
+        detail:
+          "相手サーバのポートが閉じていたり、プログラムが待ち受けていないときに SYN に対して RST+ACK が返ります。",
         layer: "L4",
       },
     ],
@@ -547,7 +708,7 @@ export const STAGE1_LESSONS: LessonArticle[] = [
     estimatedMinutes: 15,
     diagramVariant: "dns-http",
     relatedHref: {
-      href: "/labs/troubleshoot",
+      href: "/labs/troubleshoot?scenario=ts-dns-failure",
       label: "障害シミュレータでDNS障害チケットに挑戦",
     },
     glossary: [
@@ -570,6 +731,27 @@ export const STAGE1_LESSONS: LessonArticle[] = [
         shortDef: "Web ブラウザとサーバ間でHTML等を取得するプロトコル",
         detail:
           "HTTPS は HTTP を TLS で暗号化した通信です。ステータスコード 200 (成功)、404 (Not Found)、500 (サーバエラー) 等を返します。",
+        layer: "L7",
+      },
+      {
+        term: "IPアドレス",
+        shortDef: "通信相手を特定するためのネットワーク上の数字の住所",
+        detail:
+          "ブラウザは人間が入力したURLのホスト名を DNS で IPアドレス に変換してから通信します。",
+        layer: "L3",
+      },
+      {
+        term: "TLS",
+        shortDef: "HTTPS 通信の盗聴・改ざん・なりすましを防ぐ暗号化プロトコル",
+        detail:
+          "Transport Layer Security。サーバ証明書の確認と暗号鍵の交換を行って安全な通信路を作ります。",
+        layer: "L5–L6",
+      },
+      {
+        term: "NXDOMAIN",
+        shortDef: "問い合わせたドメイン名がDNSに存在しないことを示す応答",
+        detail:
+          "Non-Existent Domain。DNSサーバへ通信自体は届いているが、該当レコードが未登録またはホスト名誤りのときに返ります。",
         layer: "L7",
       },
     ],

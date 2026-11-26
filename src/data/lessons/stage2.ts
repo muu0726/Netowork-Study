@@ -11,7 +11,7 @@ export const STAGE2_LESSONS: LessonArticle[] = [
     estimatedMinutes: 20,
     diagramVariant: "vlan-trunk",
     relatedHref: {
-      href: "/labs/cli",
+      href: "/labs/cli?scenario=cli-vlan-roas",
       label: "Router-on-a-Stick 構築ラボへ進む",
     },
     glossary: [
@@ -230,7 +230,7 @@ export const STAGE2_LESSONS: LessonArticle[] = [
     estimatedMinutes: 25,
     diagramVariant: "static-ospf",
     relatedHref: {
-      href: "/labs/troubleshoot",
+      href: "/labs/troubleshoot?scenario=ts-routing-asymmetric",
       label: "拠点間Pingタイムアウト（ルート不整合）を復旧する",
     },
     glossary: [
@@ -440,7 +440,7 @@ export const STAGE2_LESSONS: LessonArticle[] = [
     estimatedMinutes: 20,
     diagramVariant: "acl-security",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=config-review",
       label: "コンフィグDiff演習で暗黙のdeny漏れをレビューする",
     },
     glossary: [
@@ -548,7 +548,7 @@ export const STAGE2_LESSONS: LessonArticle[] = [
     estimatedMinutes: 15,
     diagramVariant: "cisco-ios",
     relatedHref: {
-      href: "/labs/cli",
+      href: "/labs/cli?scenario=cli-basic-routing",
       label: "仮想CLIラボでコマンドを実践入力する",
     },
     glossary: [
@@ -652,7 +652,7 @@ export const STAGE2_LESSONS: LessonArticle[] = [
     estimatedMinutes: 25,
     diagramVariant: "ipv6-fundamentals",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=ipv6",
       label: "IPv6 圧縮・展開ツールを開く",
     },
     glossary: [

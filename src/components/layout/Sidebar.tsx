@@ -32,6 +32,12 @@ interface NavItem {
   icon: typeof LayoutDashboard;
 }
 
+const VALID_LESSON_IDS = new Set(LESSONS_META.map((l) => l.id));
+const VALID_SCENARIO_IDS = new Set([
+  ...SCENARIOS_META.map((s) => s.id),
+  ...CLOUD_SCENARIOS_META.map((c) => c.id),
+]);
+
 const NAV_ITEMS: NavItem[] = [
   {
     href: "/",
@@ -95,9 +101,12 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   const totalItems =
     LESSONS_META.length + SCENARIOS_META.length + CLOUD_SCENARIOS_META.length;
   const completedCount =
-    completedLessonIds.length + completedScenarioIds.length;
+    completedLessonIds.filter((id) => VALID_LESSON_IDS.has(id)).length +
+    completedScenarioIds.filter((id) => VALID_SCENARIO_IDS.has(id)).length;
   const overallPercent =
-    totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+    totalItems > 0
+      ? Math.min(100, Math.round((completedCount / totalItems) * 100))
+      : 0;
 
   return (
     <aside className="flex h-full w-64 flex-col border-r border-slate-800/90 bg-[#080d19]">

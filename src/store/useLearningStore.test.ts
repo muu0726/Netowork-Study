@@ -153,5 +153,23 @@ describe("useLearningStore", () => {
         JSON.stringify({ version: 1, data: { completedLessonIds: [123] } }),
       ).ok,
     ).toBe(false);
+
+    const baseValid = JSON.parse(raw) as {
+      version: number;
+      data: Record<string, unknown>;
+    };
+    for (const badPath of [
+      "https://example.com",
+      "//evil.example",
+      "javascript:alert(1)",
+    ]) {
+      const invalid = parseLearningProgressBackup(
+        JSON.stringify({
+          ...baseValid,
+          data: { ...baseValid.data, lastVisitedPath: badPath },
+        }),
+      );
+      expect(invalid.ok).toBe(false);
+    }
   });
 });

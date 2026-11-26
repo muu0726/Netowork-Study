@@ -1,7 +1,7 @@
 "use client";
 
 import { Binary, FileSearch, GitCompare, Globe, Wrench } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ConfigReviewDrill } from "@/components/tools/ConfigReviewDrill";
 import { Ipv6Tool } from "@/components/tools/Ipv6Tool";
@@ -35,6 +35,8 @@ function ToolsWorkspaceInner({
 }: {
   initialToolId: ActiveToolId;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [activeTool, setActiveTool] = useState<ActiveToolId>(initialToolId);
   const hydrated = useHydrated();
   const drillStats = useLearningStore((state) => state.drillStats);
@@ -95,7 +97,13 @@ function ToolsWorkspaceInner({
             <button
               key={tool.id}
               type="button"
-              onClick={() => setActiveTool(tool.id)}
+              onClick={() => {
+                setActiveTool(tool.id);
+                router.replace(
+                  `${pathname}?tab=${encodeURIComponent(tool.id)}`,
+                  { scroll: false },
+                );
+              }}
               className={cn(
                 "rounded-xl border p-4 text-left transition-colors",
                 isActive
@@ -151,7 +159,7 @@ export function ToolsWorkspace() {
 
   return (
     <ToolsWorkspaceInner
-      key={tabParam ?? "default"}
+      key={initialToolId}
       initialToolId={initialToolId}
     />
   );

@@ -20,10 +20,10 @@
 
 | ルート | 画面名 | 概要 |
 | --- | --- | --- |
-| `/` | **ダッシュボード** | 総合進捗、Stage 1〜3 ロードマップ、6 領域スキルレーダーチャート、弱点に基づく「今日の復習処方箋」、JSON バックアップ／復元 |
+| `/` | **ダッシュボード** | 総合進捗、完全未経験向け 3 ステップ・スタートガイド（初回表示）、Stage 1〜3 ロードマップ、6 領域スキルレーダーチャート、弱点に基づく「今日の復習処方箋」、JSON バックアップ／復元 |
 | `/learn` | **体系的カリキュラム一覧** | Stage 1（IT基礎）〜 Stage 3（実務・最新トレンド）まで全 20 記事をステージ別に整理 |
 | `/learn/[stage]/[slug]` | **レッスン記事詳細** | 初学者向け図解モード／試験対策コマンドモードの切替、インライン用語ツールチップ、章末確認クイズ |
-| `/labs/cli` | **CLI 構築ラボ** | 仮想 Cisco IOS コンソールを用いた設計・構築演習（全 5 シナリオ） |
+| `/labs/cli` | **CLI 構築ラボ** | 仮想 Cisco IOS コンソールを用いた設計・構築演習（全 6 シナリオ） |
 | `/labs/troubleshoot` | **リアル障害対応シミュレータ** | 現場の障害チケットを CLI / Linux コマンドで調査・復旧する演習（全 8 シナリオ） |
 | `/labs/cloud` | **クラウド VPC ラボ** | AWS VPC の Route Table / IGW / NAT GW / Security Group / NACL を操作する演習（全 3 シナリオ） |
 | `/tools` | **実践ミニツール＆ドリル** | IPv4 サブネット計算機＆ランダム出題、IPv6 (RFC 5952) 圧縮・展開＆種別クイズ、Wireshark 風 3 ペインパケット解析（3 ケース）、構成図・コンフィグ Diff レビュー（3 ケース） |
@@ -72,13 +72,14 @@
 </details>
 
 <details>
-<summary><strong>CLI 構築ラボ（5 シナリオ）</strong></summary>
+<summary><strong>CLI 構築ラボ（6 シナリオ）</strong></summary>
 
-1. `cli-basic-routing` — 基本IP設定とL3ルーティング疎通（初級）
-2. `cli-vlan-roas` — VLAN分割とRouter-on-a-Stick（中級）
-3. `cli-nat-acl-web` — 社内LANからインターネットへのNAPT（PAT）とWebアクセス許可ACL（実践）
-4. `cli-ospf-cost` — 3台ルータ構成でのOSPFシングルエリア構築とコスト制御（実践）
-5. `cli-stp-root-bridge` — STPルートブリッジ選出と冗長リンクのブロッキング制御（中級）
+1. `cli-first-steps` — 【超入門】最初のCLI操作：ポート起動とPing疎通体験（初級 / Stage 1）
+2. `cli-basic-routing` — 基本IP設定とL3ルーティング疎通（初級）
+3. `cli-vlan-roas` — VLAN分割とRouter-on-a-Stick（中級）
+4. `cli-nat-acl-web` — 社内LANからインターネットへのNAPT（PAT）とWebアクセス許可ACL（実践）
+5. `cli-ospf-cost` — 3台ルータ構成でのOSPFシングルエリア構築とコスト制御（実践）
+6. `cli-stp-root-bridge` — STPルートブリッジ選出と冗長リンクのブロッキング制御（中級）
 
 </details>
 
@@ -169,11 +170,11 @@ npm run dev
 
 ### テスト概要
 
-`npm test` では **16 テストファイル・93 テスト** を実行し、以下を自動検証しています。
+`npm test` では **16 テストファイル・94 テスト** を実行し、以下を自動検証しています。
 
 - IPv4 / サブネット / LPM / ワイルドカード演算および IPv6 圧縮・展開・分類ロジック
 - Cisco IOS / Linux CLI パーサ、パケットシミュレータ、ACL / NAT / DHCP、OSPF / STP / HSRP、クラウド VPC、ヘッダ分解、コンフィグ Diff
-- 全 13 本の CLI・障害対応シナリオにおける `initialState` の JSON シリアライズ性・初期不合格・`solutionCommands` 実行後の全目標合格
+- 全 14 本の CLI・障害対応シナリオにおける `initialState` の JSON シリアライズ性・初期不合格・`solutionCommands` 実行後の全目標合格
 - 全 20 記事のカリキュラムデータ構造・クイズ整合性
 - グローバル検索、総合実力診断エンジン、Zustand 学習進捗ストアおよびバックアップ JSON パース
 
@@ -196,7 +197,7 @@ npm run dev
 ├── next.config.ts
 ├── package.json
 ├── tsconfig.json
-└── vitest.config.ts
+└── vitest.config.mts
 ```
 
 ---

@@ -167,6 +167,9 @@ export function parseLearningProgressBackup(
       typeof v.solved !== "number" ||
       typeof v.attempted !== "number" ||
       typeof v.bestStreak !== "number" ||
+      !Number.isFinite(v.solved) ||
+      !Number.isFinite(v.attempted) ||
+      !Number.isFinite(v.bestStreak) ||
       v.solved < 0 ||
       v.attempted < 0 ||
       v.bestStreak < 0
@@ -190,6 +193,8 @@ export function parseLearningProgressBackup(
         !isPlainRecord(v) ||
         typeof v.correct !== "number" ||
         typeof v.total !== "number" ||
+        !Number.isFinite(v.correct) ||
+        !Number.isFinite(v.total) ||
         v.correct < 0 ||
         v.total < 0
       ) {
@@ -205,12 +210,23 @@ export function parseLearningProgressBackup(
     }
   }
 
-  const lastVisitedPath =
-    rawData.lastVisitedPath === null || rawData.lastVisitedPath === undefined
-      ? null
-      : typeof rawData.lastVisitedPath === "string"
-        ? rawData.lastVisitedPath
-        : null;
+  let lastVisitedPath: string | null = null;
+  if (
+    rawData.lastVisitedPath !== null &&
+    rawData.lastVisitedPath !== undefined
+  ) {
+    if (
+      typeof rawData.lastVisitedPath !== "string" ||
+      !rawData.lastVisitedPath.startsWith("/") ||
+      rawData.lastVisitedPath.startsWith("//")
+    ) {
+      return {
+        ok: false,
+        error: "lastVisitedPath は '/' から始まるアプリ内パスである必要があります。",
+      };
+    }
+    lastVisitedPath = rawData.lastVisitedPath;
+  }
 
   const data: PersistedLearningState = {
     completedLessonIds,

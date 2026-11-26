@@ -1,5 +1,6 @@
 import type { ScenarioDefinition } from "@/lib/network-engine";
 import { cliBasicRoutingScenario } from "./cli-basic-routing";
+import { cliFirstStepsScenario } from "./cli-first-steps";
 import { cliNatAclWebScenario } from "./cli-nat-acl-web";
 import { cliOspfCostScenario } from "./cli-ospf-cost";
 import { cliStpRootBridgeScenario } from "./cli-stp-root-bridge";
@@ -14,6 +15,7 @@ import { tsRoutingAsymmetricScenario } from "./ts-routing-asymmetric";
 import { tsVlanMismatchScenario } from "./ts-vlan-mismatch";
 
 export const CLI_LAB_SCENARIOS: ScenarioDefinition[] = [
+  cliFirstStepsScenario,
   cliBasicRoutingScenario,
   cliVlanRoasScenario,
   cliNatAclWebScenario,

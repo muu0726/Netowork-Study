@@ -61,6 +61,12 @@ const ACCENT_STYLES: Record<
   },
 };
 
+const VALID_LESSON_IDS = new Set(LESSONS_META.map((l) => l.id));
+const VALID_SCENARIO_IDS = new Set([
+  ...SCENARIOS_META.map((s) => s.id),
+  ...CLOUD_SCENARIOS_META.map((c) => c.id),
+]);
+
 const STAGE_CTA: Record<
   "stage-1" | "stage-2" | "stage-3",
   { href: string; label: string }
@@ -79,21 +85,34 @@ export function DashboardClient() {
     (state) => state.completedScenarioIds,
   );
   const drillStats = useLearningStore((state) => state.drillStats);
+  const quizScores = useLearningStore((state) => state.quizScores);
 
   const totalLessons = LESSONS_META.length;
   const totalScenarios = SCENARIOS_META.length + CLOUD_SCENARIOS_META.length;
   const totalItems = totalLessons + totalScenarios;
 
-  const completedLessonsCount = completedLessonIds.length;
-  const completedScenariosCount = completedScenarioIds.length;
+  const completedLessonsCount = completedLessonIds.filter((id) =>
+    VALID_LESSON_IDS.has(id),
+  ).length;
+  const completedScenariosCount = completedScenarioIds.filter((id) =>
+    VALID_SCENARIO_IDS.has(id),
+  ).length;
   const completedTotal = completedLessonsCount + completedScenariosCount;
   const overallPercent =
-    totalItems > 0 ? Math.round((completedTotal / totalItems) * 100) : 0;
+    totalItems > 0
+      ? Math.min(100, Math.round((completedTotal / totalItems) * 100))
+      : 0;
 
   const totalDrillSolved = Object.values(drillStats).reduce(
     (acc, record) => acc + record.solved,
     0,
   );
+  const isBrandNewLearner =
+    hydrated &&
+    completedLessonsCount === 0 &&
+    completedScenariosCount === 0 &&
+    totalDrillSolved === 0 &&
+    Object.keys(quizScores).length === 0;
 
   const labCount = SCENARIOS_META.filter((s) => s.category === "lab").length;
   const ticketCount = SCENARIOS_META.filter(
@@ -334,6 +353,76 @@ export function DashboardClient() {
         </div>
       </section>
 
+      {/* Brand-new Learner 3-Step Onboarding Guide */}
+      {isBrandNewLearner && (
+        <section
+          aria-label="完全未経験スタートガイド"
+          className="rounded-2xl border border-cyan-500/40 bg-cyan-500/5 p-5 sm:p-6"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <Badge variant="cyan">はじめての方へ</Badge>
+              <h2 className="mt-2 text-lg font-bold text-slate-50">
+                完全未経験 3ステップ・スタートガイド
+              </h2>
+              <p className="mt-1 text-xs text-slate-300 sm:text-sm">
+                どれか1つでも進めると自動で非表示になり、進捗ダッシュボード中心の表示に切り替わります。
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <Link
+              href="/learn/stage-1/lan-wan"
+              className="group rounded-xl border border-slate-800 bg-[#0d1322] p-4 transition-colors hover:border-cyan-500/60"
+            >
+              <div className="flex items-center justify-between font-mono text-[11px] text-cyan-300">
+                <span>STEP 1</span>
+                <span>約10分</span>
+              </div>
+              <p className="mt-1.5 text-sm font-bold text-slate-100 group-hover:text-cyan-200">
+                LAN / WAN の全体像を図解でつかむ
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                スイッチとルータの役割を日常の例えで直感理解します。
+              </p>
+            </Link>
+
+            <Link
+              href="/labs/cli?scenario=cli-first-steps"
+              className="group rounded-xl border border-slate-800 bg-[#0d1322] p-4 transition-colors hover:border-amber-500/60"
+            >
+              <div className="flex items-center justify-between font-mono text-[11px] text-amber-300">
+                <span>STEP 2</span>
+                <span>約5分</span>
+              </div>
+              <p className="mt-1.5 text-sm font-bold text-slate-100 group-hover:text-amber-200">
+                超入門CLIラボで最初のコマンドを叩く
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                たった1つの設定（no shutdown）で Ping が通る体験をします。
+              </p>
+            </Link>
+
+            <Link
+              href="/tools?tab=subnet"
+              className="group rounded-xl border border-slate-800 bg-[#0d1322] p-4 transition-colors hover:border-violet-500/60"
+            >
+              <div className="flex items-center justify-between font-mono text-[11px] text-violet-300">
+                <span>STEP 3</span>
+                <span>約5分</span>
+              </div>
+              <p className="mt-1.5 text-sm font-bold text-slate-100 group-hover:text-violet-200">
+                32bit サブネット計算機を触ってみる
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                スライダーを動かして2進数境界の変化を視覚で確認します。
+              </p>
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* KPI Metric Strip */}
       <section aria-label="学習進捗サマリー" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-5">
@@ -409,7 +498,8 @@ export function DashboardClient() {
             )}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            構築ラボ {labCount}本・障害チケット {ticketCount}本
+            構築ラボ {labCount}本・障害 {ticketCount}本・VPC{" "}
+            {CLOUD_SCENARIOS_META.length}本
           </p>
         </Card>
 

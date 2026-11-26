@@ -124,7 +124,7 @@ export const STAGE3_LESSONS: LessonArticle[] = [
     estimatedMinutes: 25,
     diagramVariant: "packet-analysis",
     relatedHref: {
-      href: "/tools",
+      href: "/tools?tab=wireshark",
       label: "Wireshark風パケット解析ドリルに挑戦する",
     },
     glossary: [
@@ -450,7 +450,7 @@ export const STAGE3_LESSONS: LessonArticle[] = [
     estimatedMinutes: 25,
     diagramVariant: "web-modern-network",
     relatedHref: {
-      href: "/labs/cloud",
+      href: "/labs/cloud?scenario=cloud-igw-sg-https",
       label: "クラウドVPCラボで体験",
     },
     glossary: [

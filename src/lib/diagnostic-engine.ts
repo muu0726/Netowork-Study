@@ -41,7 +41,7 @@ export const DIAGNOSTIC_DOMAINS: DiagnosticDomainMeta[] = [
       "stage1/tcp-udp",
       "stage2/ipv6-fundamentals",
     ],
-    scenarioIds: [],
+    scenarioIds: ["cli-first-steps"],
     drillIds: ["subnet", "ipv6"],
     recommendedHref: "/tools",
     recommendedLabel: "サブネット & IPv6 ドリル",

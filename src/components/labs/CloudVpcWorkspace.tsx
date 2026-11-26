@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   Trash2,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -1177,6 +1177,8 @@ function CloudVpcWorkspaceInner({
   scenarios: CloudVpcScenarioDefinition[];
   initialScenarioId: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const hydrated = useHydrated();
   const completedScenarioIds = useLearningStore(
     (state) => state.completedScenarioIds,
@@ -1205,7 +1207,13 @@ function CloudVpcWorkspaceInner({
             <button
               key={scenario.id}
               type="button"
-              onClick={() => setActiveId(scenario.id)}
+              onClick={() => {
+                setActiveId(scenario.id);
+                router.replace(
+                  `${pathname}?scenario=${encodeURIComponent(scenario.id)}`,
+                  { scroll: false },
+                );
+              }}
               className={cn(
                 "rounded-xl border p-3.5 text-left transition-colors",
                 isActive
@@ -1247,7 +1255,7 @@ export function CloudVpcWorkspace({ scenarios }: CloudVpcWorkspaceProps) {
 
   return (
     <CloudVpcWorkspaceInner
-      key={scenarioParam ?? "default"}
+      key={matched}
       scenarios={scenarios}
       initialScenarioId={matched}
     />

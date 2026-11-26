@@ -49,7 +49,7 @@ export function CurriculumCatalogClient() {
           <div className="flex items-center gap-2">
             <Badge variant="cyan">
               <Sparkles className="h-3 w-3" />
-              Stage 1–3 全16レッスン
+              Stage 1–3 全{LESSONS_META.length}レッスン
             </Badge>
             <Badge variant="slate">図解モード &amp; 試験コマンドモード搭載</Badge>
           </div>
@@ -72,7 +72,7 @@ export function CurriculumCatalogClient() {
                 : "text-slate-400 hover:text-slate-200",
             )}
           >
-            すべて (16)
+            すべて ({LESSONS_META.length})
           </button>
           {STAGES.map((stage) => (
             <button

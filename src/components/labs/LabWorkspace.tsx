@@ -18,7 +18,7 @@ import {
   Trophy,
   Undo2,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CheatSheetDrawer } from "@/components/labs/CheatSheetDrawer";
 import { CliTerminal, type TerminalLine } from "@/components/labs/CliTerminal";
@@ -799,6 +799,8 @@ function LabWorkspaceInner({
   scenarios,
   initialScenarioId,
 }: LabWorkspaceProps & { initialScenarioId: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [activeScenarioId, setActiveScenarioId] = useState<string>(
     initialScenarioId,
   );
@@ -842,7 +844,13 @@ function LabWorkspaceInner({
               <button
                 key={scenario.id}
                 type="button"
-                onClick={() => setActiveScenarioId(scenario.id)}
+                onClick={() => {
+                  setActiveScenarioId(scenario.id);
+                  router.replace(
+                    `${pathname}?scenario=${encodeURIComponent(scenario.id)}`,
+                    { scroll: false },
+                  );
+                }}
                 className={cn(
                   "scroll-mt-20 flex items-center gap-2 rounded-xl border px-3.5 py-2 text-left text-xs font-medium transition-colors",
                   isActive
@@ -885,7 +893,7 @@ export function LabWorkspace({ category, scenarios }: LabWorkspaceProps) {
 
   return (
     <LabWorkspaceInner
-      key={scenarioParam ?? "default"}
+      key={matched}
       category={category}
       scenarios={scenarios}
       initialScenarioId={matched}

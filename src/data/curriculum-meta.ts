@@ -240,6 +240,14 @@ export const LESSONS_META: LessonMeta[] = [
 
 export const SCENARIOS_META: ScenarioMeta[] = [
   {
+    id: "cli-first-steps",
+    title: "【超入門】最初のCLI操作：ポート起動とPing疎通体験",
+    category: "lab",
+    stage: "stage-1",
+    difficulty: "初級",
+    summary: "初めてのCLI演習。showコマンドで状態を確認し、no shutdown でポートを起動してPing疎通を体験します。",
+  },
+  {
     id: "cli-basic-routing",
     title: "基本IP設定とL3ルーティング疎通",
     category: "lab",
