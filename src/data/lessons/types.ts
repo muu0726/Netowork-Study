@@ -20,7 +20,17 @@ export type DiagramVariant =
   | "ipv6-fundamentals"
   | "network-management"
   | "l2-security-wireless"
-  | "web-modern-network";
+  | "web-modern-network"
+  | "physical-layer"
+  | "dhcp-dora"
+  | "vlsm-design"
+  | "l3-switch-svi"
+  | "fhrp-hsrp"
+  | "qos-pipeline"
+  | "wireless-lan"
+  | "firewall-dmz-vpn"
+  | "linux-net-stack"
+  | "internet-bgp-cdn";
 
 export interface GlossaryTerm {
   term: string;

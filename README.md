@@ -21,7 +21,7 @@
 | ルート | 画面名 | 概要 |
 | --- | --- | --- |
 | `/` | **ダッシュボード** | 総合進捗、「前回の続きから再開」カード、連続学習ストリーク、完全未経験向け 3 ステップ・スタートガイド（初回表示）、Stage 1〜3 ロードマップ、6 領域スキルレーダーチャート、弱点に基づく「今日の復習処方箋」、JSON バックアップ／復元 |
-| `/learn` | **体系的カリキュラム一覧** | Stage 1（IT基礎）〜 Stage 3（実務・最新トレンド）まで全 20 記事をステージ別に整理 |
+| `/learn` | **体系的カリキュラム一覧** | Stage 1（IT基礎）〜 Stage 3（実務・最新トレンド）まで全 30 記事をステージ別に整理 |
 | `/learn/[stage]/[slug]` | **レッスン記事詳細** | 初学者向け図解モード／試験対策コマンドモードの切替、インライン用語ツールチップ、章末確認クイズ |
 | `/labs/cli` | **CLI 構築ラボ** | 仮想 Cisco IOS コンソールを用いた設計・構築演習（全 8 シナリオ） |
 | `/labs/troubleshoot` | **リアル障害対応シミュレータ** | 現場の障害チケットを CLI / Linux コマンドで調査・復旧する演習（全 9 シナリオ、タイムアタック・ミニ障害報告書付き） |
@@ -43,17 +43,19 @@
 ## カリキュラム・シナリオ一覧
 
 <details>
-<summary><strong>カリキュラム全 20 記事（Stage 1: 6記事 / Stage 2: 9記事 / Stage 3: 5記事）</strong></summary>
+<summary><strong>カリキュラム全 30 記事（Stage 1: 8記事 / Stage 2: 14記事 / Stage 3: 8記事）</strong></summary>
 
-#### Stage 1: 完全未経験〜IT基礎（6 記事）
+#### Stage 1: 完全未経験〜IT基礎（8 記事）
 1. `stage1/lan-wan` — LAN / WAN とネットワークの全体像
 2. `stage1/osi-tcpip` — OSI参照モデル & TCP/IP カプセル化
 3. `stage1/ip-mac` — IPアドレスとMACアドレス・ARPの仕組み
 4. `stage1/subnetting` — サブネットマスクとCIDR計算の完全攻略
 5. `stage1/tcp-udp` — TCP / UDP とポート番号・3ウェイハンドシェイク
 6. `stage1/dns-http` — DNS名前解決とHTTP/HTTPS通信の流れ
+7. `stage1/physical-layer-ethernet` — 物理層 (L1)・ケーブル・光ファイバ・PoE・Duplex 基礎
+8. `stage1/dhcp-fundamentals` — DHCP による IP 自動配布（DORA・リース・リレーエージェント）
 
-#### Stage 2: CCNA合格レベル（9 記事）
+#### Stage 2: CCNA合格レベル（14 記事）
 1. `stage2/vlan-trunk` — VLAN・802.1Qトランク & Router-on-a-Stick
 2. `stage2/stp-etherchannel` — STP (スパニングツリー) と EtherChannel
 3. `stage2/static-ospf` — スタティックルートとOSPF・最長一致 (LPM)
@@ -63,13 +65,21 @@
 7. `stage2/ipv6-fundamentals` — IPv6基礎（アドレス構造・圧縮ルール・SLAAC / NDP）
 8. `stage2/network-management` — ネットワーク管理・監視（SSH・CDP/LLDP・NTP・Syslog・SNMP）
 9. `stage2/l2-security-wireless` — L2セキュリティと無線LAN（Port Security・DHCP Snooping・WLC/WPA3）
+10. `stage2/vlsm-subnet-design` — VLSM（可変長サブネットマスク）による実践IP設計と経路集約
+11. `stage2/l3-switch-svi` — L3 スイッチ・SVI (interface Vlan) とマルチレイヤ構成
+12. `stage2/fhrp-hsrp-vrrp` — デフォルトゲートウェイ冗長化 FHRP（HSRP / VRRP / GLBP）
+13. `stage2/qos-fundamentals` — QoS（通信品質制御）：分類・マーキング・優先制御 (DSCP / CoS)
+14. `stage2/wireless-lan-architecture` — 無線 LAN アーキテクチャ（Wi-Fi 6/7・チャネル・WLC/CAPWAP・802.1X）
 
-#### Stage 3: 実務・最新トレンド（5 記事）
+#### Stage 3: 実務・最新トレンド（8 記事）
 1. `stage3/troubleshooting-layers` — レイヤ別障害切り分けメソドロジー
 2. `stage3/packet-analysis` — パケットキャプチャ読解と異常通信パターン
 3. `stage3/cloud-vpc-vpn` — クラウドVPC設計・Security Group & VPN接続
 4. `stage3/netops-automation` — ネットワーク自動化・REST API・AI運用 (NetOps)
 5. `stage3/web-modern-network` — Webインフラとモダンネットワーク（TLS 1.3・LB・BGP・コンテナ網）
+6. `stage3/firewall-vpn-aaa` — 境界セキュリティ設計（FW / DMZ / IPS / AAA・TACACS+・RADIUS / IPsec VPN）
+7. `stage3/linux-network-ops` — Linux ネットワーク実務調査（ip / ss / dig / curl / tcpdump / nftables）
+8. `stage3/internet-bgp-dns-cdn` — インターネット基盤の仕組み（BGP / AS・権威DNS・リバースプロキシ・CDN）
 
 </details>
 
@@ -166,7 +176,7 @@ npm run dev
 | コマンド | 説明 |
 | --- | --- |
 | `npm run dev` | Next.js 開発サーバを起動 |
-| `npm run build` | 本番用アプリケーションをビルド（31 静的/SSG ルート生成） |
+| `npm run build` | 本番用アプリケーションをビルド（42 静的/SSG ルート生成） |
 | `npm run start` | ビルド済み本番サーバを起動 |
 | `npm run typecheck` | TypeScript 型チェック (`tsc --noEmit`) |
 | `npm run lint` | ESLint による静的解析 (`eslint .`) |
@@ -176,12 +186,12 @@ npm run dev
 
 ### テスト概要
 
-`npm test` では **18 テストファイル・103 テスト** を実行し、以下を自動検証しています。
+`npm test` では **18 テストファイル・113 テスト** を実行し、以下を自動検証しています。
 
 - IPv4 / サブネット / LPM / ワイルドカード演算および IPv6 圧縮・展開・分類ロジック
 - Cisco IOS / Linux CLI パーサ、パケットシミュレータ、ACL / NAT / DHCP、OSPF / STP / HSRP、EtherChannel (LACP) / Port Security / IPv6 ルーティング、クラウド VPC、サンドボックス構成ビルダー、ヘッダ分解、コンフィグ Diff
 - 全 17 本の CLI・障害対応シナリオにおける `initialState` の JSON シリアライズ性・初期不合格・`solutionCommands` 実行後の全目標合格
-- 全 20 記事のカリキュラムデータ構造・クイズ整合性
+- 全 30 記事のカリキュラムデータ構造・クイズ整合性
 - グローバル検索、総合実力診断エンジン、Zustand 学習進捗ストアおよびバックアップ JSON パース
 
 ---

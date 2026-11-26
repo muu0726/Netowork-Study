@@ -549,6 +549,261 @@ function renderDiagramContent(variant: DiagramVariant) {
           ))}
         </g>
       );
+
+    case "physical-layer":
+      return (
+        <g>
+          <rect x={32} y={36} width={274} height={164} rx={10} fill="#0d1322" stroke="#22d3ee" strokeWidth={1.6} />
+          <text x={169} y={62} textAnchor="middle" fill="#67e8f9" fontSize={12} fontFamily="monospace" fontWeight={700}>銅線UTP &amp; PoE</text>
+          <text x={169} y={92} textAnchor="middle" fill="#cbd5e1" fontSize={10.5} fontFamily="monospace">Cat5e / Cat6 / Cat6A (10GBASE-T)</text>
+          <text x={169} y={118} textAnchor="middle" fill="#fbbf24" fontSize={10.5} fontFamily="monospace">PoE / PoE+ (IEEE 802.3af/at)</text>
+          <text x={169} y={144} textAnchor="middle" fill="#10b981" fontSize={10.5} fontFamily="monospace">Full-Duplex ⇄ 双方向同時通信</text>
+          <text x={169} y={170} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">Auto-MDIX / MTU 1500 Bytes</text>
+
+          <rect x={334} y={36} width={274} height={164} rx={10} fill="#0d1322" stroke="#a78bfa" strokeWidth={1.6} />
+          <text x={471} y={62} textAnchor="middle" fill="#c4b5fd" fontSize={12} fontFamily="monospace" fontWeight={700}>光ファイバ &amp; SFP</text>
+          <rect x={354} y={80} width={234} height={44} rx={6} fill="#060a14" stroke="#f59e0b" />
+          <text x={471} y={100} textAnchor="middle" fill="#fcd34d" fontSize={10.5} fontFamily="monospace">MMF (マルチモード / 橙・水色)</text>
+          <text x={471} y={116} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>短〜中距離 (データセンタ内 ~400m)</text>
+          <rect x={354} y={136} width={234} height={44} rx={6} fill="#060a14" stroke="#38bdf8" />
+          <text x={471} y={156} textAnchor="middle" fill="#7dd3fc" fontSize={10.5} fontFamily="monospace">SMF (シングルモード / 黄)</text>
+          <text x={471} y={172} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>長距離 (拠点間 数km〜数十km)</text>
+        </g>
+      );
+
+    case "dhcp-dora":
+      return (
+        <g>
+          <rect x={44} y={40} width={120} height={156} rx={10} fill="#0d1322" stroke="#38bdf8" strokeWidth={1.8} />
+          <text x={104} y={76} textAnchor="middle" fill="#7dd3fc" fontSize={12} fontFamily="monospace" fontWeight={700}>Client PC</text>
+          <text x={104} y={102} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">0.0.0.0</text>
+          <text x={104} y={122} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">UDP Port 68</text>
+          <text x={104} y={168} textAnchor="middle" fill="#10b981" fontSize={10} fontFamily="monospace">IP確定!</text>
+
+          <rect x={476} y={40} width={120} height={156} rx={10} fill="#0d1322" stroke="#22d3ee" strokeWidth={1.8} />
+          <text x={536} y={76} textAnchor="middle" fill="#67e8f9" fontSize={12} fontFamily="monospace" fontWeight={700}>DHCP Server</text>
+          <text x={536} y={102} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">Pool .50~.200</text>
+          <text x={536} y={122} textAnchor="middle" fill="#94a3b8" fontSize={10} fontFamily="monospace">UDP Port 67</text>
+          <text x={536} y={168} textAnchor="middle" fill="#fbbf24" fontSize={9.5} fontFamily="monospace">ip helper-address</text>
+
+          {[
+            { y: 60, dir: "right", color: "#f59e0b", text: "1. Discover (Broadcast: DHCPサーバどこ？)" },
+            { y: 98, dir: "left", color: "#38bdf8", text: "2. Offer (192.168.10.50 を提案)" },
+            { y: 136, dir: "right", color: "#a78bfa", text: "3. Request (そのIPを借ります!)" },
+            { y: 174, dir: "left", color: "#10b981", text: "4. Ack (リース確定 + GW/DNS通知)" },
+          ].map((step) => (
+            <g key={step.text}>
+              <line x1={164} y1={step.y} x2={476} y2={step.y} stroke={step.color} strokeWidth={2} strokeDasharray={step.dir === "right" ? "5 3" : undefined} />
+              <text x={320} y={step.y - 6} textAnchor="middle" fill={step.color} fontSize={10} fontFamily="monospace" fontWeight={700}>
+                {step.text}
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+
+    case "vlsm-design":
+      return (
+        <g>
+          <text x={320} y={26} textAnchor="middle" fill="#e2e8f0" fontSize={12} fontFamily="monospace" fontWeight={700}>
+            親ブロック 192.168.10.0/24 (256アドレス) を大きい部署から分割
+          </text>
+          <rect x={36} y={48} width={284} height={82} rx={8} fill="#0d1322" stroke="#22d3ee" strokeWidth={1.8} />
+          <text x={178} y={82} textAnchor="middle" fill="#67e8f9" fontSize={12} fontFamily="monospace" fontWeight={700}>192.168.10.0/25</text>
+          <text x={178} y={104} textAnchor="middle" fill="#cbd5e1" fontSize={10}>開発部 (100台) → 最大126台収容</text>
+
+          <rect x={332} y={48} width={140} height={82} rx={8} fill="#0d1322" stroke="#f59e0b" strokeWidth={1.8} />
+          <text x={402} y={82} textAnchor="middle" fill="#fcd34d" fontSize={11} fontFamily="monospace" fontWeight={700}>.128/26</text>
+          <text x={402} y={104} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>営業 (50台/62)</text>
+
+          <rect x={484} y={48} width={120} height={82} rx={8} fill="#0d1322" stroke="#a78bfa" strokeWidth={1.8} />
+          <text x={544} y={82} textAnchor="middle" fill="#c4b5fd" fontSize={11} fontFamily="monospace" fontWeight={700}>.192/27</text>
+          <text x={544} y={104} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>管理 (20台/30)</text>
+
+          <rect x={36} y={150} width={568} height={58} rx={8} fill="#060a14" stroke="#10b981" strokeWidth={1.4} />
+          <text x={320} y={175} textAnchor="middle" fill="#6ee7b7" fontSize={11} fontFamily="monospace" fontWeight={700}>
+            WAN P2Pリンク用: .224/30 (.225 &amp; .226) + 空き領域は将来用に予約
+          </text>
+          <text x={320} y={195} textAnchor="middle" fill="#94a3b8" fontSize={10}>
+            鉄則：必要ホスト数が多いサブネットから順に割り当てて境界重複を防ぐ
+          </text>
+        </g>
+      );
+
+    case "l3-switch-svi":
+      return (
+        <g>
+          <rect x={170} y={28} width={300} height={74} rx={10} fill="#0d1322" stroke="#22d3ee" strokeWidth={2} />
+          <text x={320} y={54} textAnchor="middle" fill="#67e8f9" fontSize={12} fontFamily="monospace" fontWeight={700}>L3 Core Switch (ip routing)</text>
+          <text x={245} y={82} textAnchor="middle" fill="#fbbf24" fontSize={10.5} fontFamily="monospace">SVI Vlan10: .10.1</text>
+          <text x={395} y={82} textAnchor="middle" fill="#a78bfa" fontSize={10.5} fontFamily="monospace">SVI Vlan20: .20.1</text>
+
+          <line x1={240} y1={102} x2={150} y2={156} stroke="#f59e0b" strokeWidth={2.4} />
+          <line x1={400} y1={102} x2={490} y2={156} stroke="#a78bfa" strokeWidth={2.4} />
+          <path d="M 275 68 C 300 44, 340 44, 365 68" fill="none" stroke="#10b981" strokeWidth={2} strokeDasharray="4 3" />
+
+          <rect x={60} y={156} width={180} height={52} rx={8} fill="#0d1322" stroke="#f59e0b" />
+          <text x={150} y={180} textAnchor="middle" fill="#fef3c7" fontSize={11} fontFamily="monospace">VLAN 10 (192.168.10.0/24)</text>
+          <text x={150} y={196} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>GW: 192.168.10.1</text>
+
+          <rect x={400} y={156} width={180} height={52} rx={8} fill="#0d1322" stroke="#a78bfa" />
+          <text x={490} y={180} textAnchor="middle" fill="#ede9fe" fontSize={11} fontFamily="monospace">VLAN 20 (192.168.20.0/24)</text>
+          <text x={490} y={196} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>GW: 192.168.20.1</text>
+        </g>
+      );
+
+    case "fhrp-hsrp":
+      return (
+        <g>
+          <rect x={60} y={32} width={196} height={66} rx={10} fill="#0d1322" stroke="#10b981" strokeWidth={2} />
+          <text x={158} y={58} textAnchor="middle" fill="#6ee7b7" fontSize={12} fontFamily="monospace" fontWeight={700}>R1 (Active)</text>
+          <text x={158} y={78} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">Pri 110 / Preempt / .252</text>
+
+          <rect x={384} y={32} width={196} height={66} rx={10} fill="#0d1322" stroke="#f59e0b" strokeWidth={1.8} />
+          <text x={482} y={58} textAnchor="middle" fill="#fcd34d" fontSize={12} fontFamily="monospace" fontWeight={700}>R2 (Standby)</text>
+          <text x={482} y={78} textAnchor="middle" fill="#cbd5e1" fontSize={10} fontFamily="monospace">Pri 100 / Hello待機 / .253</text>
+
+          <rect x={210} y={114} width={220} height={36} rx={18} fill="#060a14" stroke="#22d3ee" strokeWidth={1.8} strokeDasharray="5 3" />
+          <text x={320} y={136} textAnchor="middle" fill="#67e8f9" fontSize={11} fontFamily="monospace" fontWeight={700}>
+            Virtual GW: 192.168.10.254
+          </text>
+
+          <line x1={158} y1={98} x2={250} y2={114} stroke="#10b981" strokeWidth={2.2} />
+          <line x1={482} y1={98} x2={390} y2={114} stroke="#64748b" strokeWidth={2} strokeDasharray="4 4" />
+          <line x1={320} y1={150} x2={320} y2={176} stroke="#22d3ee" strokeWidth={2.2} />
+
+          <rect x={220} y={176} width={200} height={42} rx={8} fill="#0d1322" stroke="#38bdf8" />
+          <text x={320} y={201} textAnchor="middle" fill="#e2e8f0" fontSize={11} fontFamily="monospace">PC GW = .254 (切替を意識不要)</text>
+        </g>
+      );
+
+    case "qos-pipeline":
+      return (
+        <g>
+          {[
+            { x: 26, title: "1. 分類・マーク", sub: "Voice→DSCP EF(46)", color: "#22d3ee" },
+            { x: 180, title: "2. 優先キュー", sub: "LLQ (音声を最優先)", color: "#10b981" },
+            { x: 334, title: "3. 帯域制御", sub: "Policing / Shaping", color: "#f59e0b" },
+            { x: 488, title: "4. 輻輳回避", sub: "WRED (破棄予測)", color: "#a78bfa" },
+          ].map((b, idx) => (
+            <g key={b.title}>
+              <rect x={b.x} y={64} width={126} height={100} rx={9} fill="#0d1322" stroke={b.color} strokeWidth={1.6} />
+              <text x={b.x + 63} y={104} textAnchor="middle" fill={b.color} fontSize={11} fontFamily="monospace" fontWeight={700}>
+                {b.title}
+              </text>
+              <text x={b.x + 63} y={130} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>
+                {b.sub}
+              </text>
+              {idx < 3 && (
+                <line x1={b.x + 126} y1={114} x2={b.x + 154} y2={114} stroke="#64748b" strokeWidth={2} />
+              )}
+            </g>
+          ))}
+        </g>
+      );
+
+    case "wireless-lan":
+      return (
+        <g>
+          <rect x={36} y={40} width={154} height={154} rx={10} fill="#0d1322" stroke="#38bdf8" strokeWidth={1.6} />
+          <text x={113} y={76} textAnchor="middle" fill="#7dd3fc" fontSize={12} fontFamily="monospace" fontWeight={700}>Wi-Fi 端末</text>
+          <text x={113} y={104} textAnchor="middle" fill="#cbd5e1" fontSize={10}>2.4GHz (Ch 1, 6, 11)</text>
+          <text x={113} y={124} textAnchor="middle" fill="#cbd5e1" fontSize={10}>5GHz / 6GHz (高速)</text>
+          <text x={113} y={154} textAnchor="middle" fill="#6ee7b7" fontSize={10} fontFamily="monospace">WPA3-Enterprise</text>
+
+          <line x1={190} y1={117} x2={252} y2={117} stroke="#38bdf8" strokeWidth={2} strokeDasharray="4 3" />
+
+          <rect x={252} y={56} width={132} height={122} rx={10} fill="#0d1322" stroke="#f59e0b" strokeWidth={1.6} />
+          <text x={318} y={96} textAnchor="middle" fill="#fcd34d" fontSize={12} fontFamily="monospace" fontWeight={700}>Lightweight AP</text>
+          <text x={318} y={122} textAnchor="middle" fill="#94a3b8" fontSize={10}>BSS / SSID配信</text>
+          <text x={318} y={142} textAnchor="middle" fill="#94a3b8" fontSize={10}>PoE+ 給電受電</text>
+
+          <line x1={384} y1={117} x2={446} y2={117} stroke="#a78bfa" strokeWidth={2.4} />
+          <text x={415} y={105} textAnchor="middle" fill="#c4b5fd" fontSize={9.5} fontFamily="monospace">CAPWAP</text>
+
+          <rect x={446} y={40} width={158} height={154} rx={10} fill="#0d1322" stroke="#a78bfa" strokeWidth={1.6} />
+          <text x={525} y={76} textAnchor="middle" fill="#c4b5fd" fontSize={12} fontFamily="monospace" fontWeight={700}>WLC &amp; RADIUS</text>
+          <text x={525} y={106} textAnchor="middle" fill="#cbd5e1" fontSize={10}>UDP 5246 (制御)</text>
+          <text x={525} y={126} textAnchor="middle" fill="#cbd5e1" fontSize={10}>UDP 5247 (データ)</text>
+          <text x={525} y={154} textAnchor="middle" fill="#67e8f9" fontSize={10} fontFamily="monospace">802.1X 認証連携</text>
+        </g>
+      );
+
+    case "firewall-dmz-vpn":
+      return (
+        <g>
+          <rect x={24} y={68} width={116} height={96} rx={9} fill="#0d1322" stroke="#f43f5e" strokeWidth={1.6} />
+          <text x={82} y={110} textAnchor="middle" fill="#fda4af" fontSize={11} fontFamily="monospace" fontWeight={700}>Untrust / WAN</text>
+          <text x={82} y={132} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>IPsec VPN (IKEv2)</text>
+
+          <rect x={196} y={54} width={160} height={124} rx={10} fill="#0d1322" stroke="#f59e0b" strokeWidth={2} />
+          <text x={276} y={90} textAnchor="middle" fill="#fcd34d" fontSize={12} fontFamily="monospace" fontWeight={700}>NGFW / IPS</text>
+          <text x={276} y={114} textAnchor="middle" fill="#cbd5e1" fontSize={10}>Stateful 検査</text>
+          <text x={276} y={134} textAnchor="middle" fill="#cbd5e1" fontSize={10}>Zone分離制御</text>
+          <text x={276} y={156} textAnchor="middle" fill="#67e8f9" fontSize={9.5} fontFamily="monospace">TACACS+ / RADIUS</text>
+
+          <rect x={428} y={32} width={182} height={74} rx={9} fill="#0d1322" stroke="#a78bfa" strokeWidth={1.6} />
+          <text x={519} y={62} textAnchor="middle" fill="#c4b5fd" fontSize={11} fontFamily="monospace" fontWeight={700}>DMZ (公開Web等)</text>
+          <text x={519} y={84} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>外部からHTTPSのみ許可</text>
+
+          <rect x={428} y={128} width={182} height={74} rx={9} fill="#0d1322" stroke="#10b981" strokeWidth={1.6} />
+          <text x={519} y={158} textAnchor="middle" fill="#6ee7b7" fontSize={11} fontFamily="monospace" fontWeight={700}>Trust (社内LAN/DB)</text>
+          <text x={519} y={180} textAnchor="middle" fill="#94a3b8" fontSize={9.5}>直接アクセス全面禁止</text>
+
+          <line x1={140} y1={116} x2={196} y2={116} stroke="#f43f5e" strokeWidth={2.2} />
+          <line x1={356} y1={96} x2={428} y2={69} stroke="#a78bfa" strokeWidth={2} />
+          <line x1={356} y1={138} x2={428} y2={165} stroke="#10b981" strokeWidth={2} />
+        </g>
+      );
+
+    case "linux-net-stack":
+      return (
+        <g>
+          {[
+            { y: 34, title: "L7 App & Service", cmd: "systemctl status nginx  |  curl -v https://...", color: "#a78bfa" },
+            { y: 82, title: "L7/L4 DNS & Socket", cmd: "dig web.local  |  ss -tulpn (LISTEN確認)", color: "#22d3ee" },
+            { y: 130, title: "L3/Firewall", cmd: "ip route (ip r)  |  nft list ruleset / ufw status", color: "#10b981" },
+            { y: 178, title: "L2/L1 & Packet", cmd: "ip addr (ip a)  |  ip neigh  |  tcpdump -ni eth0", color: "#f59e0b" },
+          ].map((row) => (
+            <g key={row.title}>
+              <rect x={36} y={row.y} width={568} height={38} rx={7} fill="#0d1322" stroke={row.color} strokeWidth={1.5} />
+              <text x={56} y={row.y + 23} fill={row.color} fontSize={11} fontFamily="monospace" fontWeight={700}>
+                {row.title}
+              </text>
+              <text x={242} y={row.y + 23} fill="#e2e8f0" fontSize={10.5} fontFamily="monospace">
+                {row.cmd}
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+
+    case "internet-bgp-cdn":
+      return (
+        <g>
+          <rect x={28} y={40} width={144} height={154} rx={9} fill="#0d1322" stroke="#38bdf8" strokeWidth={1.6} />
+          <text x={100} y={76} textAnchor="middle" fill="#7dd3fc" fontSize={11} fontFamily="monospace" fontWeight={700}>User &amp; DNS</text>
+          <text x={100} y={108} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>再帰DNSリゾルバ</text>
+          <text x={100} y={128} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>Root → TLD → 権威</text>
+          <text x={100} y={156} textAnchor="middle" fill="#67e8f9" fontSize={9.5} fontFamily="monospace">Anycast IP へ誘導</text>
+
+          <line x1={172} y1={117} x2={224} y2={117} stroke="#22d3ee" strokeWidth={2} />
+
+          <rect x={224} y={40} width={176} height={154} rx={9} fill="#0d1322" stroke="#22d3ee" strokeWidth={1.6} />
+          <text x={312} y={76} textAnchor="middle" fill="#67e8f9" fontSize={11} fontFamily="monospace" fontWeight={700}>CDN / Reverse Proxy</text>
+          <text x={312} y={108} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>エッジキャッシュ &amp; WAF</text>
+          <text x={312} y={128} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>SSL終端 &amp; オリジン保護</text>
+          <text x={312} y={156} textAnchor="middle" fill="#fcd34d" fontSize={9.5} fontFamily="monospace">X-Forwarded-For 付与</text>
+
+          <line x1={400} y1={117} x2={452} y2={117} stroke="#10b981" strokeWidth={2} />
+
+          <rect x={452} y={40} width={160} height={154} rx={9} fill="#0d1322" stroke="#10b981" strokeWidth={1.6} />
+          <text x={532} y={76} textAnchor="middle" fill="#6ee7b7" fontSize={11} fontFamily="monospace" fontWeight={700}>AS / BGP 網</text>
+          <text x={532} y={108} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>AS65001 ↔ AS65002</text>
+          <text x={532} y={128} textAnchor="middle" fill="#cbd5e1" fontSize={9.5}>eBGP (AS_PATH)</text>
+          <text x={532} y={156} textAnchor="middle" fill="#a78bfa" fontSize={9.5} fontFamily="monospace">フルルート経路交換</text>
+        </g>
+      );
   }
 }
 

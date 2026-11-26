@@ -87,14 +87,14 @@ test.describe("NetForge Full Application E2E", () => {
     expect(errors.consoleErrors).toEqual([]);
   });
 
-  test("2. Lesson catalog dynamic count (20 lessons) & stage filtering", async ({
+  test("2. Lesson catalog dynamic count (30 lessons), stage filtering & new lesson view", async ({
     page,
   }) => {
     const errors = attachErrorCollector(page);
     await page.goto("/learn");
 
-    await expect(page.getByText("Stage 1–3 全20レッスン")).toBeVisible();
-    await expect(page.getByRole("button", { name: "すべて (20)" })).toBeVisible();
+    await expect(page.getByText("Stage 1–3 全30レッスン")).toBeVisible();
+    await expect(page.getByRole("button", { name: "すべて (30)" })).toBeVisible();
 
     await page.getByRole("button", { name: "Stage 2" }).click();
     await expect(
@@ -103,6 +103,14 @@ test.describe("NetForge Full Application E2E", () => {
     await expect(
       page.getByText("LAN / WAN とネットワークの全体像"),
     ).toHaveCount(0);
+
+    await page.goto("/learn/stage-1/dhcp-fundamentals");
+    await expect(
+      page.getByRole("heading", {
+        name: "DHCP による IP 自動配布（DORA・リース・リレーエージェント）",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("章末理解度クイズ (4問)")).toBeVisible();
 
     expect(errors.pageErrors).toEqual([]);
     expect(errors.consoleErrors).toEqual([]);

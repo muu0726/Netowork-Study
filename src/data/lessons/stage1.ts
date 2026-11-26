@@ -929,4 +929,284 @@ export const STAGE1_LESSONS: LessonArticle[] = [
       },
     ],
   },
+  {
+    id: "stage1/physical-layer-ethernet",
+    stage: "stage-1",
+    slug: "physical-layer-ethernet",
+    title: "物理層 (L1)・ケーブル・光ファイバ・PoE・Duplex 基礎",
+    summary:
+      "UTPケーブルと光ファイバ(SMF/MMF)の違い、PoE給電、全二重/半二重・Duplex不一致を学びます。",
+    estimatedMinutes: 15,
+    diagramVariant: "physical-layer",
+    relatedHref: {
+      href: "/labs/cli?scenario=cli-first-steps",
+      label: "超入門CLIラボでLink Up/Downを体験する",
+    },
+    glossary: [
+      {
+        term: "UTPケーブル",
+        shortDef: "一般的なLANで使われる銅線ツイストペアケーブル (Cat5e/6/6A)",
+        detail:
+          "ノイズを防ぐために2本ずつペアで撚り合わせた銅線ケーブル。最大伝送距離の規格上限は原則 100m です。",
+        layer: "L1",
+      },
+      {
+        term: "SMF / MMF",
+        shortDef: "光ファイバの2種類（長距離用シングルモード / 短距離用マルチモード）",
+        detail:
+          "SMF (Single-Mode) はレーザー光で数km〜数十km伝送でき、MMF (Multi-Mode) はLED/VCSEL光で屋内・データセンタ内(数百m)に安価に使われます。",
+        layer: "L1",
+      },
+      {
+        term: "PoE",
+        shortDef: "LANケーブル1本でデータ通信と電力供給を同時に行う技術",
+        detail:
+          "Power over Ethernet (IEEE 802.3af/at/bt)。天井の無線APや監視カメラ、IP電話機への電源工事を不要にします。",
+        layer: "L1",
+      },
+      {
+        term: "全二重 (Full-Duplex)",
+        shortDef: "送信と受信を同時に行える通信方式",
+        detail:
+          "現在の有線LANの基本。半二重 (Half-Duplex) は片方向ずつ送信するため衝突 (Collision) が起き、両端が不一致 (Duplex Mismatch) になると極端に低速になります。",
+        layer: "L1/L2",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「片側一車線の交互通行 (半二重)」と「片側二車線の高速道路 (全二重)」",
+      analogyText:
+        "ネットワークの土台である L1（物理層）は、データを電気や光の信号に変えて運ぶ道路そのものです。電話のように同時に話せるのが 全二重 (Full-Duplex)、トランシーバーのように交代で話すのが 半二重 (Half-Duplex) です。また天井のWi-Fi機器などコンセントがない場所には PoE で電気まで一緒に送れます。",
+      keyPoints: [
+        {
+          title: "銅線 (UTP) は 100m まで、長距離は光ファイバ",
+          body: "一般的な LAN ケーブル (Cat6/6A) は 100m が限界です。フロア間や拠点間の長距離接続では光ファイバと SFP トランシーバを使います。",
+        },
+        {
+          title: "Auto-MDIX によりストレート/クロス意識がほぼ不要に",
+          body: "現代のスイッチやNICは送受信ピンを自動判別 (Auto-MDIX) するため、機器同士を繋ぐ際にケーブル種別を気にする場面は激減しました。",
+        },
+        {
+          title: "Duplex Mismatch はリンクアップするのに遅くなる罠",
+          body: "片方が Full、もう片方が Half になると衝突や再送が大量発生します。原則は両端とも `auto`（オートネゴシエーション）に揃えます。",
+        },
+      ],
+      steps: [
+        "機器間の距離・速度要件に応じて UTP (100m以内) か 光ファイバ (MMF/SMF) を選定します。",
+        "無線APやIPカメラなど電源が取りづらい機器には PoE / PoE+ 対応スイッチポートから給電します。",
+        "接続後は両端の速度・Duplex が正しく一致（Full-Duplex）し、CRCエラーが増えていないかを確認します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "UTP 最大長 100m、Cat5e (1Gbps)、Cat6A (10Gbps@100m)、PoE (802.3af: 15.4W) / PoE+ (802.3at: 30W) / UPOE+ (802.3bt) の数値は頻出です。",
+        "片側を `speed 100` / `duplex full` に固定し対向を `auto` のままにすると、auto側が半二重 (Half) にフォールバックし Duplex Mismatch が起きます。",
+      ],
+      referenceTable: {
+        headers: ["媒体 / 規格", "最大距離目安", "主な特徴・用途"],
+        rows: [
+          ["UTP Cat5e / Cat6", "100m", "1000BASE-T (1Gbps)、Cat6は55mまで10G対応"],
+          ["UTP Cat6A", "100m", "10GBASE-T (10Gbps) を100mフルで安定伝送"],
+          ["MMF (マルチモード光)", "〜300-400m (10G)", "橙/水色シース。安価なLED/VCSEL光源、DCラック間"],
+          ["SMF (シングルモード光)", "数km〜数十km", "黄色シース。レーザー光源、ビル間・WAN収容"],
+          ["PoE / PoE+", "100m (UTP)", "802.3af (15.4W) / 802.3at (30W) 給電"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "物理層・Duplex・エラーカウンターの確認",
+          code: "SW1# show interfaces Gig0/1\nGigabitEthernet0/1 is up, line protocol is up (connected)\n  Full-duplex, 1000Mb/s, media type is 10/100/1000BaseTX\n  0 input errors, 0 CRC, 0 frame, 0 collisions\nSW1# show power inline",
+          note: "CRCエラーや collisions / late collisions が急増している場合はケーブル劣化または Duplex Mismatch を疑います。",
+        },
+      ],
+      pitfalls: [
+        "「Link Up している＝正常」とは限りません。Duplex 不一致やケーブル損傷があると CRC エラーで実効速度が極端に落ちます。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-phy-1",
+        question: "一般的な UTP ケーブル (Cat5e / Cat6 / Cat6A) における Ethernet 規格上の最大伝送距離はどれですか？",
+        choices: ["10m", "50m", "100m", "500m"],
+        correctIndex: 2,
+        explanation:
+          "UTP（ツイストペア銅線）ケーブルの標準最大伝送距離は 100 メートルです。それ以上は光ファイバを使用します。",
+      },
+      {
+        id: "q-phy-2",
+        question: "データセンタの同一フロア内（数百メートル）でコストを抑えて高速接続する場合に主に使われ、オレンジや水色の被覆が多い光ファイバはどれですか？",
+        choices: ["SMF (シングルモードファイバ)", "MMF (マルチモードファイバ)", "同軸ケーブル", "RS-232C"],
+        correctIndex: 1,
+        explanation:
+          "短〜中距離（数百m）にはコア径が大きく安価な光源を使える MMF、数km以上の長距離には SMF が使われます。",
+      },
+      {
+        id: "q-phy-3",
+        question: "スイッチの片側ポートを `duplex full` に手動固定し、対向機器を `auto` のままにした場合に発生しやすい問題はどれですか？",
+        choices: [
+          "オートネゴシエーションが失敗した側が Half-Duplex になり、Duplex Mismatch（衝突・遅延増加）が起きる",
+          "IPv6 アドレスが自動的に無効化される",
+          "VLAN 番号が自動的に 4094 に書き換わる",
+          "PoE 給電電力が 10 倍になる",
+        ],
+        correctIndex: 0,
+        explanation:
+          "片方が手動固定で信号を出さない場合、auto 側は安全側として Half-Duplex にフォールバックするため両端不一致になります。",
+      },
+      {
+        id: "q-phy-4",
+        question: "LAN ケーブルを通じて無線 LAN アクセスポイントや IP カメラへデータと同時に電力を供給する技術はどれですか？",
+        choices: ["Auto-MDIX", "PoE (IEEE 802.3af/at)", "QoS", "ARP"],
+        correctIndex: 1,
+        explanation:
+          "PoE (Power over Ethernet) により、電源コンセントが近くにない天井や壁面の機器へスイッチから直接給電できます。",
+      },
+    ],
+  },
+  {
+    id: "stage1/dhcp-fundamentals",
+    stage: "stage-1",
+    slug: "dhcp-fundamentals",
+    title: "DHCP による IP 自動配布（DORA・リース・リレーエージェント）",
+    summary:
+      "PC接続時にIP/GW/DNSが自動設定されるDORA 4ステップと、ルータ越えのip helper-addressを理解します。",
+    estimatedMinutes: 15,
+    diagramVariant: "dhcp-dora",
+    relatedHref: {
+      href: "/labs/troubleshoot?scenario=ts-dhcp-failure",
+      label: "障害シミュレータでDHCP配布障害を復旧する",
+    },
+    glossary: [
+      {
+        term: "DHCP",
+        shortDef: "PCなどに IPアドレス・マスク・GW・DNS を自動配布する仕組み",
+        detail:
+          "Dynamic Host Configuration Protocol。UDP ポート 67（サーバ側）と 68（クライアント側）を使って設定を貸し出します。",
+        layer: "L7/L4",
+      },
+      {
+        term: "DORA",
+        shortDef: "DHCP の 4 段階手順 (Discover / Offer / Request / Ack)",
+        detail:
+          "クライアントの Discover 探索からサーバの Ack 確定まで、頭文字を取って DORA と呼びます。",
+        layer: "L7",
+      },
+      {
+        term: "ip helper-address",
+        shortDef: "ブロードキャストである DHCP 要求を別サブネットの DHCP サーバへ転送する設定",
+        detail:
+          "ルータは通常ブロードキャストを通さないため、クライアント側インターフェースに `ip helper-address <DHCPサーバIP>` を設定してユニキャスト中継します。",
+        layer: "L3",
+      },
+      {
+        term: "APIPA",
+        shortDef: "DHCP 取得に失敗したとき Windows 等が自動割り当てする仮 IP (169.254.0.0/16)",
+        detail:
+          "PCの IP が `169.254.x.x` になっていたら「DHCP サーバへ到達できていない / プール枯渇」の確実なサインです。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "ホテルのフロント (DHCP) で「空いている部屋番号 (IP)」を借りる手順",
+      analogyText:
+        "カフェの Wi-Fi や会社の LAN に PC を繋ぐたび、人間が手動で IP アドレスを入力しなくて済むのは DHCP のおかげです。クライアントが「誰か空いてる IP ください！(Discover)」と呼びかけると、DHCP が「これどうぞ！(Offer)」「それでお願いします！(Request)」「はい確定！(Ack)」の 4 往復 (DORA) で IP・サブネット・デフォルトゲートウェイ・DNS まで一括セットで貸し出してくれます。",
+      keyPoints: [
+        {
+          title: "DORA の 4 ステップ（Discover → Offer → Request → Ack）",
+          body: "最初の Discover はまだ自分の IP がない状態なので送信元 `0.0.0.0`・宛先 `255.255.255.255` のブロードキャストで飛びます。",
+        },
+        {
+          title: "除外アドレス (`excluded-address`) の設定忘れに注意",
+          body: "ルータやプリンタ、サーバに固定で振っている IP を除外しておかないと、PC に同じ IP が配られて IP 重複障害が起きます。",
+        },
+        {
+          title: "別セグメントの DHCP には `ip helper-address` が必須",
+          body: "ルータはブロードキャストを遮断するため、DHCP サーバを別ネットワークに集約する場合はルータでリレー設定を行います。",
+        },
+      ],
+      steps: [
+        "クライアントは UDP/68 から UDP/67 宛てに DHCP Discover（ブロードキャスト）を送信します。",
+        "DHCP サーバがプール内の未使用 IP を選び、DHCP Offer で貸出候補とリース期間を返します。",
+        "クライアントが DHCP Request で正式に申し込み、DHCP Ack で IP・マスク・GW・DNS が確定します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "UDP ポート 67 = DHCP サーバ、UDP ポート 68 = DHCP クライアントの区別と、DORA の順番・ブロードキャスト/ユニキャストの挙動は定番出題です。",
+        "サブネットに `169.254.x.x` (APIPA) が見えたら DHCP 失敗。原因はプール設定ミス・除外範囲過剰・`ip helper-address` 漏れ等です。",
+      ],
+      referenceTable: {
+        headers: ["ステップ", "送信元 → 宛先", "役割"],
+        rows: [
+          ["1. Discover", "Client (0.0.0.0:68) → 255.255.255.255:67", "同一LAN内の DHCP サーバを探索"],
+          ["2. Offer", "Server (:67) → Client (:68)", "貸し出し候補 IP と設定情報を提示"],
+          ["3. Request", "Client (:68) → 255.255.255.255:67", "提示された IP の正式利用を申請"],
+          ["4. Ack", "Server (:67) → Client (:68)", "リース確定（IP/Mask/GW/DNSを通知）"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Cisco IOS DHCP サーバ & リレーエージェント設定",
+          code: "R1(config)# ip dhcp excluded-address 192.168.10.1 192.168.10.20\nR1(config)# ip dhcp pool OFFICE_LAN\nR1(dhcp-config)# network 192.168.10.0 255.255.255.0\nR1(dhcp-config)# default-router 192.168.10.1\nR1(dhcp-config)# dns-server 192.168.20.10\n!\n! 別VLAN側にDHCPサーバがある場合のリレー設定\nR1(config-if)# ip helper-address 172.16.0.10",
+          note: "`ip dhcp excluded-address` はプール設定の外（グローバル設定モード）で、GWや固定IPを必ず先に除外します。",
+        },
+      ],
+      pitfalls: [
+        "`ip helper-address` は「DHCPサーバ側のポート」ではなく「クライアントが繋がっている側のインターフェース (GW)」に設定します。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-dhcp-1",
+        question: "DHCP でクライアントが IP アドレスを取得する際の 4 つのメッセージの正しい順番はどれですか？",
+        choices: [
+          "Offer → Discover → Ack → Request",
+          "Discover → Offer → Request → Ack",
+          "Discover → Request → Offer → Ack",
+          "SYN → Offer → Request → Ack",
+        ],
+        correctIndex: 1,
+        explanation:
+          "Discover（探索）→ Offer（提示）→ Request（要求）→ Ack（確定）の頭文字を取って DORA と呼びます。",
+      },
+      {
+        id: "q-dhcp-2",
+        question: "DHCP サーバを別のサブネットに集約配置した際、クライアントのブロードキャスト DHCP 要求をサーバへ中継するためにルータのクライアント側 IF に設定するコマンドはどれですか？",
+        choices: [
+          "ip nat inside",
+          "ip helper-address <DHCPサーバIP>",
+          "ip dhcp excluded-address",
+          "standby preempt",
+        ],
+        correctIndex: 1,
+        explanation:
+          "`ip helper-address` を設定すると、ルータがクライアントのブロードキャスト DHCP パケットをユニキャストに変換して DHCP サーバへ中継します。",
+      },
+      {
+        id: "q-dhcp-3",
+        question: "Windows PC の `ipconfig` を確認したところ、IP アドレスが `169.254.45.12` になっていました。この状態が示すものはどれですか？",
+        choices: [
+          "正常にグローバル IP アドレスを取得できた",
+          "DHCP サーバから応答がなく APIPA によって仮アドレスが自動割り当てされた",
+          "NAT 変換が正常に動作している",
+          "IPv6 アドレスが有効化された",
+        ],
+        correctIndex: 1,
+        explanation:
+          "`169.254.0.0/16` は APIPA (Automatic Private IP Addressing) 範囲であり、DHCP 取得失敗を示します。",
+      },
+      {
+        id: "q-dhcp-4",
+        question: "DHCP サーバ (192.168.10.0/24) で、すでに固定 IP `.1`〜`.10` をルータやプリンタに割り当てている場合、IP 重複を防ぐために必ず設定すべきコマンドはどれですか？",
+        choices: [
+          "ip dhcp excluded-address 192.168.10.1 192.168.10.10",
+          "no ip dhcp pool",
+          "switchport port-security",
+          "ip route 0.0.0.0 0.0.0.0",
+        ],
+        correctIndex: 0,
+        explanation:
+          "固定割り当て済みの IP 範囲を `ip dhcp excluded-address` で除外しておかないと、DHCP サーバが同じ IP を PC へ配布してしまいます。",
+      },
+    ],
+  },
 ];

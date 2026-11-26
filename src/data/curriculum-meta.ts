@@ -120,6 +120,22 @@ export const LESSONS_META: LessonMeta[] = [
     summary: "URL入力からIPアドレス解決、Webページ表示までの通信シーケンスを解説します。",
     estimatedMinutes: 15,
   },
+  {
+    id: "stage1/physical-layer-ethernet",
+    stage: "stage-1",
+    slug: "physical-layer-ethernet",
+    title: "物理層 (L1)・ケーブル・光ファイバ・PoE・Duplex 基礎",
+    summary: "UTPケーブルと光ファイバ(SMF/MMF)の違い、PoE給電、全二重/半二重・Duplex不一致を学びます。",
+    estimatedMinutes: 15,
+  },
+  {
+    id: "stage1/dhcp-fundamentals",
+    stage: "stage-1",
+    slug: "dhcp-fundamentals",
+    title: "DHCP による IP 自動配布（DORA・リース・リレーエージェント）",
+    summary: "PC接続時にIP/GW/DNSが自動設定されるDORA 4ステップと、ルータ越えのip helper-addressを理解します。",
+    estimatedMinutes: 15,
+  },
 
   // Stage 2: CCNA合格レベル
   {
@@ -194,6 +210,46 @@ export const LESSONS_META: LessonMeta[] = [
     summary: "スイッチポートレベルでの不正PC接続防御（Port Security・DHCP Snooping・DAI）と、法人無線LAN（WLC/CAPWAP・WPA2/WPA3）のアーキテクチャを学びます。",
     estimatedMinutes: 25,
   },
+  {
+    id: "stage2/vlsm-subnet-design",
+    stage: "stage-2",
+    slug: "vlsm-subnet-design",
+    title: "VLSM（可変長サブネットマスク）による実践IP設計と経路集約",
+    summary: "部署ごとの必要台数に合わせて大きなブロックから無駄なく分割するVLSM設計とルートサマリゼーションを学びます。",
+    estimatedMinutes: 25,
+  },
+  {
+    id: "stage2/l3-switch-svi",
+    stage: "stage-2",
+    slug: "l3-switch-svi",
+    title: "L3 スイッチ・SVI (interface Vlan) とマルチレイヤ構成",
+    summary: "Router-on-a-Stickとの違いを押さえ、L3スイッチのip routing・SVI・Routed Portによる高速VLAN間通信を学びます。",
+    estimatedMinutes: 20,
+  },
+  {
+    id: "stage2/fhrp-hsrp-vrrp",
+    stage: "stage-2",
+    slug: "fhrp-hsrp-vrrp",
+    title: "デフォルトゲートウェイ冗長化 FHRP（HSRP / VRRP / GLBP）",
+    summary: "仮想IP/MACによるデフォルトゲートウェイ二重化、Active/Standby選出、Priorityとpreempt設計を学びます。",
+    estimatedMinutes: 20,
+  },
+  {
+    id: "stage2/qos-fundamentals",
+    stage: "stage-2",
+    slug: "qos-fundamentals",
+    title: "QoS（通信品質制御）：分類・マーキング・優先制御 (DSCP / CoS)",
+    summary: "音声やWeb会議を遅延・ジッタから守るための分類・マーキング(DSCP/CoS)、LLQ、ポリシング/シェーピングを学びます。",
+    estimatedMinutes: 20,
+  },
+  {
+    id: "stage2/wireless-lan-architecture",
+    stage: "stage-2",
+    slug: "wireless-lan-architecture",
+    title: "無線 LAN アーキテクチャ（Wi-Fi 6/7・チャネル・WLC/CAPWAP・802.1X）",
+    summary: "2.4GHz/5GHz/6GHzのチャネル設計、BSS/ESSローミング、WLC/CAPWAP集中管理、WPA3/802.1X認証を体系化します。",
+    estimatedMinutes: 20,
+  },
 
   // Stage 3: 実務・最新トレンド
   {
@@ -234,6 +290,30 @@ export const LESSONS_META: LessonMeta[] = [
     slug: "web-modern-network",
     title: "Webインフラとモダンネットワーク（TLS 1.3・LB・BGP・コンテナ網）",
     summary: "実務のWebサービスを支えるTLS 1.3ハンドシェイク、L4/L7ロードバランサ(XFFヘッダ・SSL終端)、インターネットBGP基礎、Dockerブリッジネットワークを学びます。",
+    estimatedMinutes: 25,
+  },
+  {
+    id: "stage3/firewall-vpn-aaa",
+    stage: "stage-3",
+    slug: "firewall-vpn-aaa",
+    title: "境界セキュリティ設計（FW / DMZ / IPS / AAA・TACACS+・RADIUS / IPsec VPN）",
+    summary: "ステートフルFWとDMZ 3ゾーン設計、機器管理のAAA (TACACS+ vs RADIUS)、拠点間IPsec VPN (IKEv2/ESP) を体系的に学びます。",
+    estimatedMinutes: 25,
+  },
+  {
+    id: "stage3/linux-network-ops",
+    stage: "stage-3",
+    slug: "linux-network-ops",
+    title: "Linux ネットワーク実務調査（ip / ss / dig / curl / tcpdump / nftables）",
+    summary: "本番サーバ障害時に欠かせない iproute2・ソケット待ち受け確認・DNS/TLS診断・パケット採取・Linux FW調査を網羅します。",
+    estimatedMinutes: 20,
+  },
+  {
+    id: "stage3/internet-bgp-dns-cdn",
+    stage: "stage-3",
+    slug: "internet-bgp-dns-cdn",
+    title: "インターネット基盤の仕組み（BGP / AS・権威DNS・リバースプロキシ・CDN）",
+    summary: "AS間ルーティング(eBGP/iBGP・AS_PATH)、Root〜権威DNSの反復問い合わせ、Anycast CDNとリバースプロキシの動作を理解します。",
     estimatedMinutes: 25,
   },
 ];

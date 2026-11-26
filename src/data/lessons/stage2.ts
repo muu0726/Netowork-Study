@@ -1037,4 +1037,635 @@ SW1(config)# ip arp inspection vlan 10`,
       },
     ],
   },
+  {
+    id: "stage2/vlsm-subnet-design",
+    stage: "stage-2",
+    slug: "vlsm-subnet-design",
+    title: "VLSM（可変長サブネットマスク）による実践IP設計と経路集約",
+    summary:
+      "部署ごとの必要台数に合わせて大きなブロックから無駄なく分割するVLSM設計とルートサマリゼーションを学びます。",
+    estimatedMinutes: 25,
+    diagramVariant: "vlsm-design",
+    relatedHref: {
+      href: "/tools?tab=subnet",
+      label: "サブネット計算機＆ドリルでVLSM設計を練習する",
+    },
+    glossary: [
+      {
+        term: "VLSM",
+        shortDef: "1つのネットワークを異なるサブネットマスク長で柔軟に分割する手法",
+        detail:
+          "Variable Length Subnet Mask。固定長 (FLSM) と異なり、PC 100台の部署には /25、ルータ間 WAN には /30 のように無駄なく割り当てられます。",
+        layer: "L3",
+      },
+      {
+        term: "ルート集約",
+        shortDef: "連続する複数のサブネットを1つの大きなプレフィックスにまとめる技術",
+        detail:
+          "Route Summarization (CIDR集約)。ルーティングテーブルの行数を減らし、メモリ消費と障害時の経路再計算負荷を抑えます。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「大きなホールケーキ (1つの /24)」を人数に合わせて大小切り分ける",
+      analogyText:
+        "100人グループも2人グループも同じ大きさの箱で分けると大量の無駄が出ます。VLSM は『まず一番大人数の100人分 (/25) を大きく切り出し、残った半分から50人分 (/26)、さらに残りから2人分の WAN 用 (/30) を切る』という賢い分割ルールです。",
+      keyPoints: [
+        {
+          title: "鉄則：必ず「必要ホスト数が最大のグループ」から割り当てる",
+          body: "小さいサブネットを先に取ると連続した大きな空きブロックが作れなくなり、アドレス重複や断片化の原因になります。",
+        },
+        {
+          title: "WAN リンクは /30（または /31）で節約する",
+          body: "ルータ同士を 1 対 1 で繋ぐ区間には 2 個の IP しか不要なので、/24 ではなく /30 (255.255.255.252) を使います。",
+        },
+        {
+          title: "ルート集約で経路表をスリム化する",
+          body: "たとえば `192.168.0.0/24`〜`192.168.3.0/24` の4本が連続していれば `192.168.0.0/22` の1行にまとめられます。",
+        },
+      ],
+      steps: [
+        "各セグメントの必要ホスト数を降順（大きい順）に並べ替えます。",
+        "各グループを収容できる最小の 2^n - 2 (>= 必要数) のプレフィックス長を決定します。",
+        "先頭アドレスから順に境界を合わせて割り当て、互いに重複していないか検証します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "CCNA では「次に割り当てるサブネットのネットワークアドレス・ブロードキャストアドレスは何か」「重複していないか」を問う VLSM 計算が頻出です。",
+        "経路集約では、集約対象アドレスを2進数で並べ、先頭から一致しているビット数を数えてプレフィックス長を出します。",
+      ],
+      referenceTable: {
+        headers: ["用途例", "必要ホスト数", "選定プレフィックス", "割り当て例 (192.168.10.0/24内)"],
+        rows: [
+          ["開発部 LAN", "100台", "/25 (126台)", "192.168.10.0 - .127"],
+          ["営業部 LAN", "50台", "/26 (62台)", "192.168.10.128 - .191"],
+          ["管理LAN", "20台", "/27 (30台)", "192.168.10.192 - .223"],
+          ["WAN P2Pリンク", "2台", "/30 (2台)", "192.168.10.224 - .227"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "VLSM + ルート集約の設定例",
+          code: "! 4つの/24 (172.16.0.0 〜 172.16.3.0) を1本に集約して対向へ広告\nR1(config)# ip route 172.16.0.0 255.255.252.0 10.0.0.2",
+          note: "255.255.252.0 (/22) は第3オクテットが4つ分 (0〜3) を1つに束ねます。",
+        },
+      ],
+      pitfalls: [
+        "ブロック境界を無視して `.100/26` のように途中から切り始めるのは誤りです。`/26` は必ず 64 の倍数 (0, 64, 128, 192) から始まります。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-vlsm-1",
+        question: "VLSM を用いて 1 つの IP ブロックを複数部署に割り当てる際、設計手順として正しい原則はどれですか？",
+        choices: [
+          "必要ホスト数が最も少ない部署（WANリンク等）から順に割り当てる",
+          "必要ホスト数が最も多い部署から順に割り当てる",
+          "全セグメントを必ず /24 固定で割り当てる",
+          "第4オクテットの奇数のアドレスから始める",
+        ],
+        correctIndex: 1,
+        explanation:
+          "大きいブロックから順に境界を揃えて割り当てることで、アドレス空間の断片化や重複を防げます。",
+      },
+      {
+        id: "q-vlsm-2",
+        question: "`192.168.10.0/25` と `192.168.10.128/26` を割り当てた直後、次の 20 台用サブネット (`/27`) として使える最小のネットワークアドレスはどれですか？",
+        choices: ["192.168.10.160", "192.168.10.192", "192.168.10.200", "192.168.10.224"],
+        correctIndex: 1,
+        explanation:
+          "`.0/25` が .0〜.127、`.128/26` が .128〜.191 を使うため、次の空き先頭は 32 の倍数である `.192/27` (.192〜.223) です。",
+      },
+      {
+        id: "q-vlsm-3",
+        question: "`10.1.0.0/24`, `10.1.1.0/24`, `10.1.2.0/24`, `10.1.3.0/24` の 4 つの経路を最も効率よく 1 つにルート集約した表記はどれですか？",
+        choices: ["10.1.0.0/21", "10.1.0.0/22", "10.1.0.0/23", "10.1.0.0/24"],
+        correctIndex: 1,
+        explanation:
+          "4 つの /24 は 2bit 分のホスト（第3オクテット 00〜11）をまとめるため、24 - 2 = /22 (`255.255.252.0`) になります。",
+      },
+      {
+        id: "q-vlsm-4",
+        question: "ルータ自身の管理用ループバックインターフェース (`Loopback0`) などに、単一ホスト識別子として割り当てられることが多い最小プレフィックス長はどれですか？",
+        choices: ["/24", "/29", "/30", "/32"],
+        correctIndex: 3,
+        explanation:
+          "`/32` (`255.255.255.255`) は 1 つのIPアドレスのみを表すホストルートとして Loopback IF で広く使われます。",
+      },
+    ],
+  },
+  {
+    id: "stage2/l3-switch-svi",
+    stage: "stage-2",
+    slug: "l3-switch-svi",
+    title: "L3 スイッチ・SVI (interface Vlan) とマルチレイヤ構成",
+    summary:
+      "Router-on-a-Stickとの違いを押さえ、L3スイッチのip routing・SVI・Routed Portによる高速VLAN間通信を学びます。",
+    estimatedMinutes: 20,
+    diagramVariant: "l3-switch-svi",
+    relatedHref: {
+      href: "/labs/cli?scenario=cli-vlan-roas",
+      label: "VLAN間ルーティング構築ラボへ進む",
+    },
+    glossary: [
+      {
+        term: "L3スイッチ",
+        shortDef: "L2スイッチングと L3 ルーティングの両方を専用チップ (ASIC) で高速処理する機器",
+        detail:
+          "マルチレイヤスイッチ (MLS) とも呼ばれ、社内コアスイッチとして多数の VLAN 間通信をワイヤスピードで転送します。",
+        layer: "L2/L3",
+      },
+      {
+        term: "SVI",
+        shortDef: "L3スイッチ内部に作る仮想の VLAN 用ゲートウェイインターフェース",
+        detail:
+          "Switched Virtual Interface (`interface Vlan 10`)。外部ルータへのトランク折り返しなしで VLAN 間ルーティングを行えます。",
+        layer: "L3",
+      },
+      {
+        term: "Routed Port",
+        shortDef: "L3スイッチの物理ポートを純粋なルータポートとして使う設定 (`no switchport`)",
+        detail:
+          "対向ルータや FW と接続するときに VLAN を経由せず直接 IP アドレスを振れるモードです。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "1つの建物の中だけで階を移動できる「館内直通エレベーター (SVI)」",
+      analogyText:
+        "Router-on-a-Stick は、スイッチの1階から2階へ行くのに毎回外のルータを経由して戻ってくる仕組みでした。社員数が増えるとこの細い橋が渋滞します。そこで、スイッチ自身にルーティング機能と各フロア用の玄関 (SVI) を内蔵したのが L3スイッチ です。",
+      keyPoints: [
+        {
+          title: "`ip routing` コマンドを有効にしないと L3 転送が始まらない",
+          body: "多くの L3 スイッチは初期状態で L2 動作のため、グローバル設定モードで `ip routing` の有効化が必須です。",
+        },
+        {
+          title: "SVI が Up になる 3 つの条件",
+          body: "①その VLAN が存在する ②SVI が `no shutdown` ③その VLAN に属する Up 状態のアクセスまたはトランクポートが 1 つ以上ある、の 3 点です。",
+        },
+        {
+          title: "対向ルータ接続には `no switchport` (Routed Port)",
+          body: "スイッチポートから L2 機能を切り離し、通常のルータと同じ感覚で `ip address` を設定できます。",
+        },
+      ],
+      steps: [
+        "L3スイッチで `ip routing` を実行して L3 ルーティング機能を有効化します。",
+        "各 VLAN を作成し、`interface Vlan <id>` (SVI) へその VLAN のデフォルトゲートウェイ IP を設定します。",
+        "上位ルータや WAN へ繋ぐアップリンクポートには `no switchport` を入れて IP を設定します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "SVI 方式 vs Router-on-a-Stick 方式の特徴比較（ASIC ハードウェア転送による高速性・ボトルネック解消）は頻出です。",
+        "Routed Port に変換するコマンド `no switchport` と、L2 ポートに戻す `switchport` の違いを押さえましょう。",
+      ],
+      referenceTable: {
+        headers: ["方式", "処理場所", "帯域・拡張性", "主な用途"],
+        rows: [
+          ["Router-on-a-Stick", "外部ルータ + 1本のトランク", "トランク1本がボトルネック", "小規模拠点・検証ラボ"],
+          ["L3スイッチ (SVI)", "スイッチ内部 ASIC", "ワイヤスピードで超高速", "企業コア/ディストリビューション"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "L3 スイッチ SVI & Routed Port 設定例",
+          code: "CoreSW(config)# ip routing\nCoreSW(config)# vlan 10,20\nCoreSW(config)# interface Vlan10\nCoreSW(config-if)# ip address 192.168.10.1 255.255.255.0\nCoreSW(config-if)# no shutdown\nCoreSW(config)# interface Gig1/0/24\nCoreSW(config-if)# no switchport\nCoreSW(config-if)# ip address 10.0.0.1 255.255.255.252",
+          note: "L3スイッチで `interface Vlan10` に設定した IP を VLAN 10 内 PC のデフォルトゲートウェイに指定します。",
+        },
+      ],
+      pitfalls: [
+        "SVI を作っても、その VLAN にリンクアップしたアクセスポートまたは通過許可されたトランクポートが1つもないと SVI は `up/down` になります。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-l3sw-1",
+        question: "Cisco L3 スイッチ上で VLAN 10 と VLAN 20 の間のルーティングを有効にするため、グローバル設定モードで最初に投入すべきコマンドはどれですか？",
+        choices: ["router vlan", "ip routing", "switchport mode trunk", "encapsulation dot1Q"],
+        correctIndex: 1,
+        explanation:
+          "L3 スイッチは既定で `ip routing` が無効になっているモデルが多いため、明示的に有効化して L3 転送を開始します。",
+      },
+      {
+        id: "q-l3sw-2",
+        question: "L3 スイッチの物理ポート `Gig1/0/24` を L2 スイッチポートではなく純粋な L3 ルーテッドポートとして使い、直接 IP アドレスを設定するためのコマンドはどれですか？",
+        choices: ["switchport mode access", "no switchport", "interface Vlan 24", "spanning-tree portfast"],
+        correctIndex: 1,
+        explanation:
+          "`no switchport` を投入すると L2 機能が外れ、ルータの物理インターフェースと同様に `ip address` を設定できるようになります。",
+      },
+      {
+        id: "q-l3sw-3",
+        question: "Router-on-a-Stick と比較した、L3 スイッチ (SVI) による VLAN 間ルーティングの最大のメリットはどれですか？",
+        choices: [
+          "トランクケーブルを往来するボトルネックがなく、専用ASICによりワイヤスピードで高速転送できる",
+          "サブネットマスクを設定しなくてよくなる",
+          "STP によるループ防止が不要になる",
+          "MAC アドレスを使わずに通信できる",
+        ],
+        correctIndex: 0,
+        explanation:
+          "L3 スイッチは内部バックプレーン上の ASIC で L3 転送するため、外部ルータへのトランク折り返しによる帯域制限を受けません。",
+      },
+      {
+        id: "q-l3sw-4",
+        question: "L3 スイッチで `interface Vlan 10` (SVI) を作成し `no shutdown` したのに、`show ip interface brief` で `up/down` のままになる原因として最も考えられるものはどれですか？",
+        choices: [
+          "VLAN 10 が未作成、または VLAN 10 を通過できる Up 状態のアクセス/トランクポートが 1 つもない",
+          "SVI にワイルドカードマスクを設定していない",
+          "OSPF Area 0 が有効になっている",
+          "Auto-MDIX が有効になっている",
+        ],
+        correctIndex: 0,
+        explanation:
+          "SVI のプロトコル状態が up になるには、対応する VLAN の存在と、その VLAN 所属の稼働ポートが最低 1 つ必要です。",
+      },
+    ],
+  },
+  {
+    id: "stage2/fhrp-hsrp-vrrp",
+    stage: "stage-2",
+    slug: "fhrp-hsrp-vrrp",
+    title: "デフォルトゲートウェイ冗長化 FHRP（HSRP / VRRP / GLBP）",
+    summary:
+      "仮想IP/MACによるデフォルトゲートウェイ二重化、Active/Standby選出、Priorityとpreempt設計を学びます。",
+    estimatedMinutes: 20,
+    diagramVariant: "fhrp-hsrp",
+    relatedHref: {
+      href: "/labs/troubleshoot?scenario=ts-hsrp-failover-broken",
+      label: "障害シミュレータでHSRPフェイルオーバーを復旧する",
+    },
+    glossary: [
+      {
+        term: "FHRP",
+        shortDef: "デフォルトゲートウェイを複数台で冗長化するプロトコル群の総称",
+        detail:
+          "First Hop Redundancy Protocol。HSRP・VRRP・GLBP の 3 つが代表的で、PC 側は単一の仮想IPだけを見ていれば障害時に自動切替できます。",
+        layer: "L3",
+      },
+      {
+        term: "HSRP",
+        shortDef: "Cisco 独自のゲートウェイ冗長化プロトコル (Active / Standby)",
+        detail:
+          "Hot Standby Router Protocol。プライマリが Active、待機側が Standby となり、Hello メッセージで生存監視します。",
+        layer: "L3",
+      },
+      {
+        term: "VRRP",
+        shortDef: "標準化 (RFC) されたマルチベンダ対応のゲートウェイ冗長化 (Master / Backup)",
+        detail:
+          "Virtual Router Redundancy Protocol。Cisco 以外の機器とも混在構成を組めます。",
+        layer: "L3",
+      },
+      {
+        term: "preempt",
+        shortDef: "高優先度のプライマリルータが復旧した際に自動で Active へ切り戻す設定",
+        detail:
+          "HSRP ではデフォルト無効のため、`standby <grp> preempt` を入れないとメンテナンス復旧後に Standby のまま残ります。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "正副 2 人の窓口係 (Active/Standby) が共有する「代表窓口番号 (VIP)」",
+      analogyText:
+        "PC のデフォルトゲートウェイ設定は通常 1 つしか書けません。もしその 1 台のルータが壊れたら、全社員の通信が止まります。そこで 2 台のルータが協力して 1 つの『代表 IP（仮想IP: VIP）』と『仮想 MAC』を名乗り、普段は Active が対応し、ダウンした瞬間だけ Standby が同じ代表番号を引き継ぐのが FHRP (HSRP/VRRP) です。",
+      keyPoints: [
+        {
+          title: "PC は仮想 IP (VIP) のみをデフォルトゲートウェイに向ける",
+          body: "実機 R1 (`.252`) や R2 (`.253`) ではなく、共通の仮想 IP (`.254`) を向けておくことで切替時の PC 設定変更が不要になります。",
+        },
+        {
+          title: "Priority が高い方が Active（初期値は 100）",
+          body: "優先度が同じ場合はインターフェースの IP アドレスが大きい方が Active に選ばれます。",
+        },
+        {
+          title: "HSRP は `preempt` を忘れると自動切り戻しされない",
+          body: "VRRP は既定で preempt 有効ですが、HSRP は既定で無効なのでプライマリ側に `standby <grp> preempt` を明記します。",
+        },
+      ],
+      steps: [
+        "R1 と R2 の LAN 側インターフェースに異なる実 IP（例: `.252` と `.253`）を設定します。",
+        "両機で同じ HSRP グループ番号と仮想 IP (`standby 10 ip 192.168.10.254`) を設定します。",
+        "プライマリ側に高い `priority`（例: 110）と `preempt` を入れ、PC 側の GW を `.254` に設定します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "HSRP のロール名称 (Active / Standby)、VRRP のロール名称 (Master / Backup)、GLBP の負荷分散 (AVG / AVF) の対比は CCNA 頻出です。",
+        "HSRP v1 の仮想 MAC (`0000.0c07.acXX`) と HSRP v2 (`0000.0c9f.fXXX`) の形式も覚えておくと完璧です。",
+      ],
+      referenceTable: {
+        headers: ["プロトコル", "仕様区分", "役割名", "負荷分散", "既定Preempt"],
+        rows: [
+          ["HSRP", "Cisco独自", "Active / Standby", "不可（VLAN単位で調整）", "無効 (要設定)"],
+          ["VRRP", "標準 (RFC)", "Master / Backup", "不可", "有効"],
+          ["GLBP", "Cisco独自", "AVG / AVF", "可（1グループで自動分散）", "無効"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "HSRP Primary (R1) / Secondary (R2) 設定と確認",
+          code: "R1(config-if)# standby 10 ip 192.168.10.254\nR1(config-if)# standby 10 priority 110\nR1(config-if)# standby 10 preempt\n!\nR2(config-if)# standby 10 ip 192.168.10.254\n!\nR1# show standby brief",
+          note: "`show standby brief` で State (Active/Standby), P (preempt), Virtual IP を一覧確認できます。",
+        },
+      ],
+      pitfalls: [
+        "2台のルータ間でグループ番号や仮想 IP が 1 文字でも違うと、両方が勝手に Active になって通信が不安定になります。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-fhrp-1",
+        question: "HSRP 構成において、既定のプライオリティ (100) のままのルータが障害から復旧した際に、より高いプライオリティ (120) を持つルータが即座に Active を奪還するために必要な設定はどれですか？",
+        choices: ["standby 10 preempt", "standby 10 track", "ip routing", "switchport mode trunk"],
+        correctIndex: 0,
+        explanation:
+          "HSRP は既定で非プリエンプトのため、`standby <group> preempt` を設定しないと優先度が高くても自動で Active に戻りません。",
+      },
+      {
+        id: "q-fhrp-2",
+        question: "異なるベンダ製ルータ同士でデフォルトゲートウェイを冗長化したい場合、採用すべき標準プロトコルはどれですか？",
+        choices: ["HSRP", "GLBP", "VRRP", "CDP"],
+        correctIndex: 2,
+        explanation:
+          "HSRP と GLBP は Cisco 独自仕様ですが、VRRP は RFC で標準化されており異ベンダ間でも相互接続できます。",
+      },
+      {
+        id: "q-fhrp-3",
+        question: "1 つのグループ内で複数のゲートウェイルータに同時にトラフィックを負荷分散（ロードバランシング）できる Cisco 独自の FHRP はどれですか？",
+        choices: ["HSRP", "VRRP", "GLBP", "STP"],
+        correctIndex: 2,
+        explanation:
+          "GLBP (Gateway Load Balancing Protocol) は AVG が複数の仮想 MAC を応答することで単一グループ内での負荷分散を実現します。",
+      },
+      {
+        id: "q-fhrp-4",
+        question: "R1 (`192.168.10.252`) と R2 (`192.168.10.253`) で HSRP 仮想 IP `192.168.10.254` を構成したとき、LAN 内 PC に設定すべきデフォルトゲートウェイはどれですか？",
+        choices: ["192.168.10.252", "192.168.10.253", "192.168.10.254", "255.255.255.255"],
+        correctIndex: 2,
+        explanation:
+          "PC は常に仮想 IP (`192.168.10.254`) をゲートウェイに設定することで、どちらのルータが Active でも透過的に通信できます。",
+      },
+    ],
+  },
+  {
+    id: "stage2/qos-fundamentals",
+    stage: "stage-2",
+    slug: "qos-fundamentals",
+    title: "QoS（通信品質制御）：分類・マーキング・優先制御 (DSCP / CoS)",
+    summary:
+      "音声やWeb会議を遅延・ジッタから守るための分類・マーキング(DSCP/CoS)、LLQ、ポリシング/シェーピングを学びます。",
+    estimatedMinutes: 20,
+    diagramVariant: "qos-pipeline",
+    relatedHref: {
+      href: "/exam",
+      label: "模擬試験でCCNA範囲の定着度を確認する",
+    },
+    glossary: [
+      {
+        term: "QoS",
+        shortDef: "特定の重要通信（音声・動画・基幹業務）に優先権や帯域保証を与える技術",
+        detail:
+          "Quality of Service。回線が混雑 (輻輳) した際、重要度の低い大容量ダウンロードを待たせて音声・Web会議の音切れを防ぎます。",
+        layer: "L2/L3",
+      },
+      {
+        term: "ジッタ",
+        shortDef: "パケット到達間隔の揺らぎ（ばらつき）",
+        detail:
+          "平均遅延が小さくてもジッタが大きいと、IP電話やビデオ会議で音声が途切れたりロボット声になったりします。",
+        layer: "L3/L4",
+      },
+      {
+        term: "DSCP",
+        shortDef: "IPヘッダの ToS/DiffServ フィールド (6bit) に書き込むL3優先度ラベル",
+        detail:
+          "Differentiated Services Code Point。音声用の最優先 EF (46) や保証転送 AF などの値で通信の種類を識別します。",
+        layer: "L3",
+      },
+      {
+        term: "LLQ",
+        shortDef: "音声などの遅延厳禁トラフィックを常に最優先で送り出すキューイング方式",
+        detail:
+          "Low Latency Queuing。他の帯域保証キュー (CBWFQ) の前に厳格な優先キュー (Priority Queue) を配置します。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "高速道路の「救急車専用レーン」と「荷物の重要度シール」",
+      analogyText:
+        "回線が空いているときは QoS の出番はありません。しかし昼休みやバックアップ時間帯に回線が渋滞したとき、全員を同じ列に並ばせると、緊急の『Web会議の声』まで遅れてブツブツ途切れてしまいます。そこで入口でパケットに重要度シール (DSCP / CoS) を貼り、混雑時は音声専用レーン (LLQ) を先に行かせるのが QoS です。",
+      keyPoints: [
+        {
+          title: "QoS は「輻輳（混雑）」が起きた瞬間に効果を発揮する",
+          body: "遅延 (Latency)、揺らぎ (Jitter)、パケットロス (Loss) の 3 指標を目標値以内に収めるのが目的です。",
+        },
+        {
+          title: "L2 は CoS (3bit)、L3 は DSCP (6bit) でマーキング",
+          body: "802.1Q トランク上では L2 の CoS 値、ルータを越えるエンドツーエンドでは L3 IP ヘッダの DSCP 値を使います。",
+        },
+        {
+          title: "Policing（即破棄）と Shaping（バッファ平準化）の違い",
+          body: "Policing は上限超過分を即ドロップ、Shaping は一時バッファに溜めて平滑化して送り出します。",
+        },
+      ],
+      steps: [
+        "トラフィックを分類 (Classification) し、通信種別を識別します（例: RTP音声、HTTPS、ファイル転送）。",
+        "信頼できる境界 (Trust Boundary) で DSCP / CoS 値によるマーキングを行います。",
+        "ルータ出口でキューイング (LLQ/CBWFQ) やシェーピング・WRED 輻輳回避を適用します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "音声トラフィックの推奨指標（片道遅延 <= 150ms、ジッタ <= 30ms、ロス <= 1%）と DSCP EF (46) は CCNA 定番です。",
+        "Policing（帯域超過パケットを破棄・主にインバウンドやISP境界）と Shaping（キューに貯めて遅延させつつ送信・主にアウトバウンド）の対比を整理しましょう。",
+      ],
+      referenceTable: {
+        headers: ["技術 / 値", "階層 / 範囲", "用途・特徴"],
+        rows: [
+          ["CoS (802.1p)", "L2 (802.1Q 3bit: 0-7)", "VLANタグ付きフレーム内でのみ有効 (音声=5)"],
+          ["DSCP EF", "L3 (IPヘッダ 6bit: 46)", "音声/リアルタイム通信向け最優先転送"],
+          ["LLQ", "キューイング", "厳格優先キュー + 帯域保証キュー (CBWFQ)"],
+          ["Shaping vs Policing", "帯域制御", "Shaping=バッファ遅延 / Policing=超過分即破棄"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "MQC (Modular QoS CLI) による音声優先 (LLQ) 設定イメージ",
+          code: "R1(config)# class-map match-any VOICE\nR1(config-cmap)# match dscp ef\nR1(config)# policy-map WAN_QOS\nR1(config-pmap)# class VOICE\nR1(config-pmap-c)# priority percent 20\nR1(config)# interface Gig0/1\nR1(config-if)# service-policy output WAN_QOS",
+          note: "`class-map` で分類、`policy-map` で優先制御、`service-policy` でインターフェースへ適用するのが MQC の 3 ステップです。",
+        },
+      ],
+      pitfalls: [
+        "一般ユーザー PC からの勝手な DSCP マーキングを信用すると全通信が最優先扱いになるため、スイッチのアクセスポート側で上書き・制限 (Trust Boundary) します。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-qos-1",
+        question: "IP 電話の音声パケットのように、極めて低い遅延が求められるトラフィックに対して IP ヘッダに付与される代表的な DSCP 値はどれですか？",
+        choices: ["Best Effort (0)", "AF11 (10)", "EF (Expedited Forwarding: 46)", "CS1 (8)"],
+        correctIndex: 2,
+        explanation:
+          "DSCP EF (値 46) は Expedited Forwarding として音声などのリアルタイム通信を最優先転送するために使われます。",
+      },
+      {
+        id: "q-qos-2",
+        question: "契約帯域を超えたトラフィックを即座に破棄するのではなく、バッファに一時保持して平滑化しながら送信する QoS 機能はどれですか？",
+        choices: ["Policing", "Shaping", "Trust Boundary", "WRED"],
+        correctIndex: 1,
+        explanation:
+          "Shaping は超過パケットをメモリにキューイングして送信レートを均一化します。Policing は即座に破棄（またはマークダウン）します。",
+      },
+      {
+        id: "q-qos-3",
+        question: "L2 の 802.1Q トランクフレームヘッダ内にのみ存在し、ルータを越えて L3 ルーティングされると引き継がれない 3bit の優先度フィールドはどれですか？",
+        choices: ["DSCP", "CoS (Class of Service)", "TTL", "MTU"],
+        correctIndex: 1,
+        explanation:
+          "CoS (3bit: 0〜7) は Ethernet の 802.1Q タグ内部にあるため L2 セグメント内に限定されます。L3 越えには DSCP を使います。",
+      },
+      {
+        id: "q-qos-4",
+        question: "パケットの到達時間の「ばらつき（揺らぎ）」を指し、大きくなると Web 会議や音声通話の品質が大きく劣化する指標はどれですか？",
+        choices: ["スループット", "ジッタ (Jitter)", "ホップ数", "MTU"],
+        correctIndex: 1,
+        explanation:
+          "ジッタはパケット間隔の揺らぎを意味し、音声・動画の滑らかさに直結します。",
+      },
+    ],
+  },
+  {
+    id: "stage2/wireless-lan-architecture",
+    stage: "stage-2",
+    slug: "wireless-lan-architecture",
+    title: "無線 LAN アーキテクチャ（Wi-Fi 6/7・チャネル・WLC/CAPWAP・802.1X）",
+    summary:
+      "2.4GHz/5GHz/6GHzのチャネル設計、BSS/ESSローミング、WLC/CAPWAP集中管理、WPA3/802.1X認証を体系化します。",
+    estimatedMinutes: 20,
+    diagramVariant: "wireless-lan",
+    relatedHref: {
+      href: "/exam",
+      label: "模擬試験で無線LAN・セキュリティを確認する",
+    },
+    glossary: [
+      {
+        term: "2.4GHz / 5GHz / 6GHz",
+        shortDef: "Wi-Fi が利用する 3 つの周波数帯",
+        detail:
+          "2.4GHz は壁に強いが干渉が多く非重複チャネルは 1・6・11 の 3 本のみ。5GHz/6GHz (Wi-Fi 6E/7) は高速でチャネル数が多いのが特徴です。",
+        layer: "L1/L2",
+      },
+      {
+        term: "BSS / ESS",
+        shortDef: "1台のAPが作る電波範囲が BSS、同じ SSID で複数APを束ねた拡張範囲が ESS",
+        detail:
+          "同じ ESS 内でチャネルをずらしつつ同じ SSID を吹くことで、端末が移動しても通信が切れにくいローミングを実現します。",
+        layer: "L2",
+      },
+      {
+        term: "WLC / CAPWAP",
+        shortDef: "多数の軽量APを中央から一括制御する無線コントローラと管理トンネル",
+        detail:
+          "Autonomous AP（単体設定）と対比され、WLC が CAPWAP (UDP 5246/5247) で全APの設定・チャネル・ローミングを集中管理します。",
+        layer: "L2/L7",
+      },
+      {
+        term: "802.1X / RADIUS",
+        shortDef: "社員ごとの ID・証明書で認証を行う法人向け無線セキュリティ (Enterprise)",
+        detail:
+          "全員同じ共通パスワード (PSK) を使う Personal 方式と異なり、退職者のアカウントだけを個別に無効化できます。",
+        layer: "L2/L7",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「1人1台ずつ設定する個人店 (Autonomous)」と「本部一括管理のチェーン店 (WLC)」",
+      analogyText:
+        "自宅の Wi-Fi は1台だけなので手動設定で済みますが、オフィスビルに50台の AP がある場合、1台ずつ設定変更するのは不可能です。そこで『司令塔 (WLC)』を1箇所に置き、天井には電波を出すだけの子機 (Lightweight AP) を並べて CAPWAP という専用トンネルで一括管理するのが法人 Wi-Fi の基本です。",
+      keyPoints: [
+        {
+          title: "2.4GHz で重ならないチャネルは「1・6・11」の 3 つだけ",
+          body: "隣り合う AP に 1ch と 2ch を振ると電波が潰し合って極端に遅くなります。必ず 1・6・11 を交互に配置します。",
+        },
+        {
+          title: "5GHz / 6GHz は高速だが壁に遮られやすい",
+          body: "電子レンジ等の干渉を受けにくく高速な 5GHz/6GHz を主力としつつ、障害物越しは 2.4GHz で補完する設計が一般的です。",
+        },
+        {
+          title: "法人は WPA2/WPA3-Enterprise (802.1X + RADIUS)",
+          body: "共通パスワード方式 (PSK) は社員退職時のパスワード一斉変更が大変なため、企業では個人認証の 802.1X を採用します。",
+        },
+      ],
+      steps: [
+        "フロア図上で電波干渉しないよう、隣接 AP に異なる非重複チャネル (2.4GHzなら 1/6/11) を配置します。",
+        "Lightweight AP を PoE スイッチへ接続し、DHCP Option 43 や DNS 経由で WLC を発見して CAPWAP トンネルを張ります。",
+        "WLC 上で SSID・VLAN マッピング・WPA2/WPA3-Enterprise (RADIUS 連携) を配信し、全 AP へ一括反映します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "2.4GHz の非重複チャネル (1, 6, 11)、CAPWAP ポート (UDP 5246 制御 / UDP 5247 データ)、CSMA/CA（無線LANの衝突回避方式）は最頻出です。",
+        "WPA2 (AES-CCMP) と WPA3 (SAE / GCMP-256) の暗号方式の進化もよく問われます。",
+      ],
+      referenceTable: {
+        headers: ["項目", "詳細・数値", "実務/試験のポイント"],
+        rows: [
+          ["アクセス制御方式", "CSMA/CA", "有線(CSMA/CD)と異なり衝突「回避」を行う"],
+          ["2.4GHz 非重複Ch", "1, 6, 11", "隣接APで同チャネル干渉 (CCI) を防ぐ"],
+          ["CAPWAP ポート", "UDP 5246 / 5247", "5246=Control (暗号化), 5247=Data"],
+          ["暗号化進化", "TKIP → AES → SAE", "WPA3 では PSK に代わり SAE で辞書攻撃対策"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "AP 接続用スイッチポート (Trunk / PoE) 設定例",
+          code: "SW1(config)# interface Gig1/0/5\nSW1(config-if)# switchport mode trunk\nSW1(config-if)# switchport trunk native vlan 99\nSW1(config-if)# switchport trunk allowed vlan 10,20,99\nSW1(config-if)# power inline auto",
+          note: "ローカルスイッチング (FlexConnect) 構成では、複数の無線 SSID を別々の VLAN へ振り分けるため AP 接続ポートをトランクにします。",
+        },
+      ],
+      pitfalls: [
+        "SSID のステルス設定（非表示化）はセキュリティ対策になりません。認証と暗号化は必ず WPA2/WPA3 (AES/SAE + 802.1X) で担保します。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-wlan-1",
+        question: "2.4GHz 帯の無線 LAN で、互いに電波干渉（重複）を起こさずに同時配置できる 3 つのチャネル番号の組み合わせはどれですか？",
+        choices: ["1, 2, 3", "1, 6, 11", "2, 7, 12", "36, 40, 44"],
+        correctIndex: 1,
+        explanation:
+          "2.4GHz 帯の 1 チャネルは幅 22MHz あり中心周波数が 5MHz 刻みのため、互いに重ならないのは 1・6・11 ch のみです。",
+      },
+      {
+        id: "q-wlan-2",
+        question: "無線 LAN (IEEE 802.11) が、有線 Ethernet (CSMA/CD) と異なり送信前の衝突を未然に防ぐために採用しているアクセス制御方式はどれですか？",
+        choices: ["CSMA/CA", "Token Ring", "STP", "LACP"],
+        correctIndex: 0,
+        explanation:
+          "無線空間では送信しながらの衝突検出が困難なため、ランダム待機と ACK 確認を組み合わせた CSMA/CA (Collision Avoidance) を使います。",
+      },
+      {
+        id: "q-wlan-3",
+        question: "WPA3-Personal で従来の WPA2-PSK (4ウェイハンドシェイク) に代わって導入され、オフライン辞書攻撃を強力に防ぐ鍵交換方式はどれですか？",
+        choices: ["WEP", "TKIP", "SAE (Simultaneous Authentication of Equals)", "Telnet"],
+        correctIndex: 2,
+        explanation:
+          "WPA3 では SAE（ドラゴンフライハンドシェイク）を採用し、事前共有鍵への総当たり・オフライン辞書攻撃を防ぎます。",
+      },
+      {
+        id: "q-wlan-4",
+        question: "企業内で社員ごとに個別アカウントやクライアント証明書で無線 LAN 認証を行い、退職時のアクセス剥奪を容易にしたい場合に選ぶべき認証方式はどれですか？",
+        choices: [
+          "オープン認証 + MACフィルタリング",
+          "WPA2/WPA3-Enterprise (IEEE 802.1X + RADIUS)",
+          "WEP 128bit",
+          "SSID ステルス化",
+        ],
+        correctIndex: 1,
+        explanation:
+          "802.1X + RADIUS 連携の Enterprise モードを使えば、ユーザー単位での認証・動的 VLAN 割り当て・個別無効化が可能です。",
+      },
+    ],
+  },
 ];

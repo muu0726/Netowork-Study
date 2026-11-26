@@ -574,4 +574,394 @@ export const STAGE3_LESSONS: LessonArticle[] = [
       },
     ],
   },
+  {
+    id: "stage3/firewall-vpn-aaa",
+    stage: "stage-3",
+    slug: "firewall-vpn-aaa",
+    title: "境界セキュリティ設計（FW / DMZ / IPS / AAA・TACACS+・RADIUS / IPsec VPN）",
+    summary:
+      "ステートフルFWとDMZ 3ゾーン設計、機器管理のAAA (TACACS+ vs RADIUS)、拠点間IPsec VPN (IKEv2/ESP) を体系的に学びます。",
+    estimatedMinutes: 25,
+    diagramVariant: "firewall-dmz-vpn",
+    relatedHref: {
+      href: "/labs/cloud?scenario=cloud-igw-sg-https",
+      label: "クラウドVPCラボでステートフルFWを体験する",
+    },
+    glossary: [
+      {
+        term: "ステートフルFW",
+        shortDef: "通信のセッション状態（行きと帰り）を記憶して戻り通信を自動許可する FW",
+        detail:
+          "単なる ACL（ステートレス）と違い、社内→外部の許可通信に対する戻りパケットを自動許可し、不正なセッション外通信を遮断します。",
+        layer: "L3–L7",
+      },
+      {
+        term: "DMZ",
+        shortDef: "外部公開サーバを社内LAN (Trust) から隔離して置く緩衝地帯 (非武装地帯)",
+        detail:
+          "万一外部公開 Web サーバが乗っ取られても、DMZ から社内 DB への横展開 (Lateral Movement) を FW ポリシーで食い止めます。",
+        layer: "設計",
+      },
+      {
+        term: "AAA",
+        shortDef: "認証 (Authentication)・認可 (Authorization)・記録 (Accounting) の 3 要素",
+        detail:
+          "ネットワーク機器への管理者ログインを中央サーバ (TACACS+ / RADIUS) で統制し、「誰が・いつ・何のコマンドを打ったか」を監査可能にします。",
+        layer: "L7",
+      },
+      {
+        term: "IPsec VPN",
+        shortDef: "インターネット上に暗号化された仮想専用トンネルを張る技術 (IKEv2 / ESP)",
+        detail:
+          "拠点間接続 (Site-to-Site) に広く使われ、ESP プロトコル (IP番号 50) でデータの暗号化・完全性・認証を保護します。",
+        layer: "L3",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「受付ロビー (DMZ)」で来客を止め、「役員室 (社内LAN)」へ絶対に入れない設計",
+      analogyText:
+        "外部から誰でもアクセスする Web サーバを、社内人事データのある LAN と同じ部屋に置くのは危険すぎます。そこで ファイアウォール を真ん中に立て、外部 (Untrust)・公開サーバ置き場 (DMZ)・社内LAN (Trust) の 3 つに部屋を分けます。また、ルータの設定変更をする作業者も AAA サーバで名簿チェックと操作ログ記録を行います。",
+      keyPoints: [
+        {
+          title: "DMZ から社内 LAN への直接通信は原則禁止",
+          body: "必要な API や DB 接続のみ、送信元・宛先・ポートを最小権限でピンポイント許可します。",
+        },
+        {
+          title: "TACACS+ (機器管理向け) vs RADIUS (ネットワーク認証向け)",
+          body: "TACACS+ は TCP 49 を使いパケット全体を暗号化し、コマンド単位の認可が得意です。RADIUS は UDP 1812/1813 で無線 802.1X 認証に定番です。",
+        },
+        {
+          title: "IPsec VPN は IKE (鍵交換) + ESP (暗号データ転送) の 2 段階",
+          body: "まず IKE (UDP 500/4500) で安全な鍵交換チャンネルを作り、次に ESP で実データを暗号化して拠点間を結びます。",
+        },
+      ],
+      steps: [
+        "ファイアウォールで Untrust / DMZ / Trust のセキュリティゾーンを定義し、デフォルト拒否ポリシーを設定します。",
+        "管理者アクセス用に AAA (TACACS+) を構成し、サーバ障害時用のローカルフォールバックアカウントも残します。",
+        "拠点間 VPN では IKEv2 パラメータと暗号化対象トラフィックを両拠点で完全一致させ、トンネルを確立します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "TACACS+ (TCP 49 / パケット全体暗号化 / 認証・認可を分離) と RADIUS (UDP 1812, 1813 / パスワード部のみ暗号化 / 認証と認可を一体化) の違いは超頻出です。",
+        "IPS (自動遮断するインライン型) と IDS (検知・通知のみの監視型) の違いも押さえましょう。",
+      ],
+      referenceTable: {
+        headers: ["項目", "TACACS+", "RADIUS"],
+        rows: [
+          ["トランスポート", "TCP 49", "UDP 1812 (認証) / 1813 (アカウンティング)"],
+          ["暗号化範囲", "パケットボディ全体", "パスワード部分のみ"],
+          ["コマンド単位認可", "対応（IOS機器管理に最適）", "非対応/限定的（802.1X・VPN認証に最適）"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "AAA (TACACS+) 認証設定の基本構造",
+          code: "R1(config)# aaa new-model\nR1(config)# tacacs server TAC_MAIN\nR1(config-server-tacacs)# address ipv4 10.10.10.50\nR1(config-server-tacacs)# key StrongSecretKey\nR1(config)# aaa authentication login default group tacacs+ local",
+          note: "最後に `local` を入れておくと、TACACS+ サーバが落ちた緊急時でもローカル認証でログインできロックアウトを防げます。",
+        },
+      ],
+      pitfalls: [
+        "`aaa authentication login` で `local` フォールバックを書き忘れると、管理サーバとの通信が切れた瞬間に全管理者が機器へ入れなくなります。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-fw-1",
+        question: "ネットワーク機器管理の AAA プロトコルとして、TCP ポート 49 を使用し、パケット全体を暗号化してコマンド単位の細かい認可制御が可能なものはどれですか？",
+        choices: ["RADIUS", "TACACS+", "SNMPv2c", "TFTP"],
+        correctIndex: 1,
+        explanation:
+          "TACACS+ は TCP 49・全体暗号化・AAA の 3 機能分離を特徴とし、ルータ/スイッチの CLI 運用統制に広く使われます。",
+      },
+      {
+        id: "q-fw-2",
+        question: "外部公開用の Web サーバを社内基幹 LAN から分離配置するネットワーク領域（ゾーン）の名称はどれですか？",
+        choices: ["Loopback", "DMZ (非武装地帯)", "APIPA", "Native VLAN"],
+        correctIndex: 1,
+        explanation:
+          "DMZ に公開サーバを分離することで、万一侵入されても社内 LAN への被害拡大をファイアウォールで阻止できます。",
+      },
+      {
+        id: "q-fw-3",
+        question: "ステートレスな標準/拡張 ACL と比較した、ステートフルファイアウォール最大の特徴はどれですか？",
+        choices: [
+          "通信セッションの状態を追跡し、許可された往路通信に対する戻りパケットを動的に許可する",
+          "IP アドレスを見ずに MAC アドレスだけで転送する",
+          "すべての通信を暗号化してから送信する",
+          "L1 のケーブル断線を自動修復する",
+        ],
+        correctIndex: 0,
+        explanation:
+          "ステートフル FW はコネクションテーブルを保持するため、戻り通信用に広範なインバウンド穴開けを書く必要がありません。",
+      },
+      {
+        id: "q-fw-4",
+        question: "IPsec VPN でデータ本体の暗号化と改ざん検知（認証）を担う主要プロトコルはどれですか？",
+        choices: ["ESP (Encapsulating Security Payload)", "ARP", "CDP", "SMTP"],
+        correctIndex: 0,
+        explanation:
+          "IPsec では ESP (IP プロトコル番号 50) がペイロード暗号化と完全性保護を担当します（AH は暗号化なし）。",
+      },
+    ],
+  },
+  {
+    id: "stage3/linux-network-ops",
+    stage: "stage-3",
+    slug: "linux-network-ops",
+    title: "Linux ネットワーク実務調査（ip / ss / dig / curl / tcpdump / nftables）",
+    summary:
+      "本番サーバ障害時に欠かせない iproute2・ソケット待ち受け確認・DNS/TLS診断・パケット採取・Linux FW調査を網羅します。",
+    estimatedMinutes: 20,
+    diagramVariant: "linux-net-stack",
+    relatedHref: {
+      href: "/labs/troubleshoot?scenario=ts-linux-nginx-down",
+      label: "Linux障害シミュレータでWeb停止を調査・復旧する",
+    },
+    glossary: [
+      {
+        term: "iproute2",
+        shortDef: "現代の Linux でネットワーク設定・確認を行う標準コマンド群 (`ip a`, `ip r`)",
+        detail:
+          "古い `ifconfig` / `netstat` / `route` に代わる標準ツール群で、`ip addr` / `ip route` / `ip neigh` 等を使用します。",
+        layer: "L2/L3",
+      },
+      {
+        term: "ss -tulpn",
+        shortDef: "Linux 上で待ち受け (LISTEN) 中の TCP/UDP ポートとプロセス名を表示するコマンド",
+        detail:
+          "`t`=TCP, `u`=UDP, `l`=LISTEN, `p`=プロセス, `n`=数字ポート。`127.0.0.1:80` で待機していないか（外部から繋がらない原因）も一目で分かります。",
+        layer: "L4",
+      },
+      {
+        term: "tcpdump",
+        shortDef: "Linux CLI 上でリアルタイムにパケットをキャプチャ・保存する標準ツール",
+        detail:
+          "`tcpdump -ni eth0 port 443 -w cap.pcap` で採取し、Wireshark で開いて詳細調査する流れが実務の定番です。",
+        layer: "L2–L7",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "サーバという名の「お店」を上から下まで点検する 5 つの道具",
+      analogyText:
+        "Ping は通るのに Web サイトが表示されないとき、ネットワーク機器だけでなく『受け手側の Linux サーバ』の調査が必要です。お店の営業状態 (`systemctl`)、窓口が開いているか (`ss -tulpn`)、看板の住所案内 (`dig`)、来客時の受け答え (`curl -v`)、防犯カメラ (`tcpdump`) の順に確認すれば原因は必ず見つかります。",
+      keyPoints: [
+        {
+          title: "`127.0.0.1:8080` の LISTEN は外部から繋がらない定番トラップ",
+          body: "`ss -tulpn` の Local Address が `0.0.0.0:8080` ではなく `127.0.0.1:8080` の場合、同じサーバ内からしか接続できません。",
+        },
+        {
+          title: "`curl -v` で DNS → TCP → TLS → HTTP を一気通貫チェック",
+          body: "名前解決に失敗したのか、TCP で拒否されたのか、TLS 証明書で落ちたのか、HTTP 502 なのかが 1 コマンドで分かります。",
+        },
+        {
+          title: "OS ファイアウォール (`nftables` / `ufw` / `firewalld`) も忘れず確認",
+          body: "クラウド SG を開けても、OS 内部のファイアウォールで 443 番が閉じているケースは実務で非常に多いです。",
+        },
+      ],
+      steps: [
+        "`ip a` と `ip r` でサーバ自身の IP・NIC 状態・デフォルトルートが正しいか確認します。",
+        "`ss -tulpn` と `systemctl status nginx` でアプリが対象ポートを LISTEN しているか確認します。",
+        "`dig` / `curl -v` で外向き・自己通信を試し、必要なら `tcpdump` と `nft list ruleset` でパケットと OS FW を確認します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "`ss -tulpn` 各オプションの意味と、`tcpdump -ni <if> host <ip> and port <port>` の構文は実務・技術面接でも頻出です。",
+        "`ip neigh` は Linux 上の ARP / NDP キャッシュ確認コマンドです。",
+      ],
+      referenceTable: {
+        headers: ["コマンド", "確認対象", "実務での注目ポイント"],
+        rows: [
+          ["ip a / ip r / ip neigh", "IP / ルート / ARPテーブル", "NICが UP か、default via が正しいか"],
+          ["ss -tulpn", "LISTEN ポートとプロセス", "0.0.0.0 か 127.0.0.1 か、PID 起動有無"],
+          ["systemctl status <svc>", "systemd サービス稼働状態", "active (running) か inactive/failed か"],
+          ["dig @<dns> <host>", "DNS 応答の詳細", "status: NOERROR / NXDOMAIN / timed out"],
+          ["curl -v <url>", "TCP / TLS / HTTP 応答", "接続先IP・TLSハンドシェイク・Status Code"],
+          ["tcpdump -ni eth0", "実際の送受信パケット", "SYNが着ているか、RSTを返していないか"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Web 障害時の Linux 調査ゴールデンコマンド集",
+          code: "srv$ ip -br a\nsrv$ ip r\nsrv$ ss -tulpn | grep -E '80|443'\nsrv$ sudo systemctl status nginx\nsrv$ curl -svI https://api.internal.local\nsrv$ sudo tcpdump -ni eth0 tcp port 443 -c 20",
+          note: "`-n` (名前解決しない) と `-i` (IF指定) を付けた `tcpdump` は本番負荷を抑えつつ素早く確認する鉄則です。",
+        },
+      ],
+      pitfalls: [
+        "DNS 不通時に `tcpdump` で `-n` を付け忘れると、パケット1行ごとに逆引き DNS タイムアウトが発生して出力が極端に遅くなります。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-lin-1",
+        question: "Linux サーバ上で「現在 LISTEN している TCP/UDP ポートと、それを開いているプロセス名」を名前解決なしの高速表示で確認するコマンドはどれですか？",
+        choices: ["ip route", "ss -tulpn", "dig -x", "systemctl enable"],
+        correctIndex: 1,
+        explanation:
+          "`ss -tulpn` は TCP/UDP の待ち受けソケットをポート番号とプロセス情報付きで一覧表示します。",
+      },
+      {
+        id: "q-lin-2",
+        question: "`ss -tulpn` の出力で Web アプリが `127.0.0.1:8080` で LISTEN していました。他の PC からこのポートへ接続できない理由はどれですか？",
+        choices: [
+          "ループバックアドレスにのみバインドされており、外部 NIC からの接続を受け付けていないため",
+          "8080 番ポートは UDP 専用であるため",
+          "Linux カーネルが IPv4 を無効化しているため",
+          "DNS Aレコードが必須であるため",
+        ],
+        correctIndex: 0,
+        explanation:
+          "外部からのアクセスを受けるには `0.0.0.0:8080`（または外部側 NIC の IP）で LISTEN させる必要があります。",
+      },
+      {
+        id: "q-lin-3",
+        question: "Linux で `tcpdump` を実行する際、DNS 逆引きによる表示遅延を防ぎつつ特定ポートだけを採取したいときに付けるべき定番オプションはどれですか？",
+        choices: ["-n (数値表示)", "-r (ファイル読込)", "-k (Keepalive)", "-z (圧縮)"],
+        correctIndex: 0,
+        explanation:
+          "`-n` を指定することで IP やポート番号を名前解決せずにそのまま数字で高速出力できます。",
+      },
+      {
+        id: "q-lin-4",
+        question: "従来の `arp -a` に代わり、現在の Linux `iproute2` で ARP / NDP キャッシュを確認するコマンドはどれですか？",
+        choices: ["ip link", "ip neigh", "ip rule", "systemctl list-units"],
+        correctIndex: 1,
+        explanation:
+          "`ip neigh` (ip neighbor) で同一リンク上の解決済み MAC アドレスキャッシュと状態 (REACHABLE / STALE / FAILED) を確認できます。",
+      },
+    ],
+  },
+  {
+    id: "stage3/internet-bgp-dns-cdn",
+    stage: "stage-3",
+    slug: "internet-bgp-dns-cdn",
+    title: "インターネット基盤の仕組み（BGP / AS・権威DNS・リバースプロキシ・CDN）",
+    summary:
+      "AS間ルーティング(eBGP/iBGP・AS_PATH)、Root〜権威DNSの反復問い合わせ、Anycast CDNとリバースプロキシの動作を理解します。",
+    estimatedMinutes: 25,
+    diagramVariant: "internet-bgp-cdn",
+    relatedHref: {
+      href: "/tools?tab=wireshark",
+      label: "Wireshark風ドリルで実通信パケットを解析する",
+    },
+    glossary: [
+      {
+        term: "AS (自律システム)",
+        shortDef: "ISPやクラウド事業者が運用する統一ポリシー下の巨大ネットワーク単位 (AS番号)",
+        detail:
+          "Autonomous System。それぞれの AS が固有の AS 番号 (ASN) を持ち、AS 同士を BGP で接続してインターネットが成り立っています。",
+        layer: "L3",
+      },
+      {
+        term: "eBGP / iBGP",
+        shortDef: "異なる AS 間で経路交換するのが eBGP、同一 AS 内での経路共有が iBGP",
+        detail:
+          "パスベクタ型ルーティングプロトコルであり、経由した AS 番号のリスト (`AS_PATH`) を見てループを防ぎ、最適経路を選びます。",
+        layer: "L3",
+      },
+      {
+        term: "権威 DNS サーバ",
+        shortDef: "特定ドメインの公式な DNS レコード（正解データ）を保持・応答するサーバ",
+        detail:
+          "PC が最初に聞く『再帰 DNS リゾルバ (8.8.8.8 等)』は、Root DNS → TLD DNS (.com等) → 権威 DNS へ順に問い合わせて答えを持ち帰ります。",
+        layer: "L7",
+      },
+      {
+        term: "Anycast CDN",
+        shortDef: "世界中のエッジ拠点が同じ IP を BGP 広告し、ユーザーに最寄りの拠点で応答する仕組み",
+        detail:
+          "キャッシュ配信や DDoS 緩和、TLS 終端をユーザーに近いエッジで行うことで、表示速度向上とオリジンサーバ保護を両立します。",
+        layer: "L3/L7",
+      },
+    ],
+    beginnerMode: {
+      analogyTitle: "「世界中の郵便局をつなぐ国際ルール (BGP)」と「最寄りのコンビニ受取 (CDN)」",
+      analogyText:
+        "社内ネットワークでは OSPF を使いますが、世界中のプロバイダやクラウド (AS) がつながるインターネット全体では、より大規模で政治的・契約的ルールも扱える BGP が使われます。また、海外の本社サーバまで毎回取りに行くと遅いため、世界各地のコンビニ (CDN エッジ) にコピーを置いて一番近い店舗へ案内するのが Anycast CDN です。",
+      keyPoints: [
+        {
+          title: "OSPF は社内 (IGP)、BGP はインターネット・クラウド接続 (EGP)",
+          body: "AWS Direct Connect や複数 ISP マルチホーミング構成では、企業側ルータでも BGP を設定します。",
+        },
+        {
+          title: "DNS は「再帰問い合わせ」と「反復問い合わせ」の 2 段構え",
+          body: "PC → リゾルバは再帰（答えをもらうまで待つ）、リゾルバ → Root/TLD/権威 は反復（次の案内先をたらい回しで辿る）で解決されます。",
+        },
+        {
+          title: "リバースプロキシ / CDN はオリジンを守る盾にもなる",
+          body: "静的コンテンツのキャッシュ、WAF による攻撃遮断、TLS 終端を前段で引き受けることでバックエンド負荷を大幅に下げます。",
+        },
+      ],
+      steps: [
+        "クライアントは再帰 DNS リゾルバへ問い合わせ、リゾルバは Root → TLD → 権威 DNS を辿って CDN エッジ IP を取得します。",
+        "BGP の Anycast 経路制御により、クライアントのパケットは最も近い BGP 経路上の CDN エッジへ届きます。",
+        "キャッシュヒットすればエッジから即応答し、動的 API リクエストのみリバースプロキシ経由でバックエンド (オリジン) へ転送します。",
+      ],
+    },
+    examMode: {
+      examTips: [
+        "BGP のポート (TCP 179)、パス属性 (`AS_PATH`, `Local Preference`, `MED`)、eBGP (AD=20) vs iBGP (AD=200) は重要ポイントです。",
+        "DNS のキャッシュ TTL 設計（レコード切り替え前に TTL を短くしておく実務定石）もよく問われます。",
+      ],
+      referenceTable: {
+        headers: ["構成要素", "主なプロトコル/仕組み", "役割"],
+        rows: [
+          ["BGP (EGP)", "TCP 179 / AS_PATH", "AS間の大規模経路制御・クラウド専用線接続"],
+          ["再帰リゾルバ", "UDP/TCP 53 (キャッシュ有)", "クライアントの代わりに Root〜権威DNS を巡回"],
+          ["CDN / WAF", "Anycast BGP + HTTPS", "最寄り拠点からの高速配信・L7攻撃防御"],
+          ["Reverse Proxy", "Nginx / Envoy / ALB", "SSL終端・負荷分散・X-Forwarded-For 付与"],
+        ],
+      },
+      commandBlocks: [
+        {
+          title: "Cisco IOS eBGP ネイバー基本構成 & 権威DNSトレース",
+          code: "R1(config)# router bgp 65001\nR1(config-router)# neighbor 203.0.113.2 remote-as 65002\nR1(config-router)# network 198.51.100.0 mask 255.255.255.0\nR1# show ip bgp summary\n!\n$ dig +trace example.com",
+          note: "`dig +trace` を実行すると、Root (.) → TLD (.com) → 権威 DNS サーバへ辿る実際の反復問い合わせの流れを観察できます。",
+        },
+      ],
+      pitfalls: [
+        "DNS レコード変更前に TTL (例: 86400秒) を下げ忘れて切り替えると、旧 IP のキャッシュが世界中のリゾルバに最大 24 時間残り切り替わりません。",
+      ],
+    },
+    quiz: [
+      {
+        id: "q-bgp-1",
+        question: "BGP がルーティングループを検出し、またデフォルトで経路の近さを比較する際に参照する「経由した AS 番号の並び」を表す属性はどれですか？",
+        choices: ["Cost", "AS_PATH", "Hop Count", "VLAN ID"],
+        correctIndex: 1,
+        explanation:
+          "BGP はパスベクタ型であり、自分の AS 番号が `AS_PATH` に含まれている経路を受け取るとループ防止のため破棄します。",
+      },
+      {
+        id: "q-bgp-2",
+        question: "クライアント PC が 8.8.8.8 などの再帰 DNS リゾルバへ名前解決を依頼したとき、リゾルバがキャッシュを持っていない場合に最初に問い合わせに行く先はどこですか？",
+        choices: ["クライアントのローカル hosts", "ルート DNS サーバ (.)", "CDN オリジンサーバ", "デフォルトゲートウェイの MAC"],
+        correctIndex: 1,
+        explanation:
+          "キャッシュミス時はルート DNS (.) → トップレベルドメイン (.com 等) → 権威 DNS サーバの順に反復問い合わせを行います。",
+      },
+      {
+        id: "q-bgp-3",
+        question: "世界中の複数の CDN エッジ拠点に対して同一の IP アドレスを BGP 広告させ、ユーザーをネットワーク的に最も近い拠点へ自動誘導する技術はどれですか？",
+        choices: ["Anycast", "Broadcast", "Token Ring", "DHCP Snooping"],
+        correctIndex: 0,
+        explanation:
+          "Anycast は複数拠点から同じプレフィックスを広告し、BGP の経路選択によって最寄りのノードへトラフィックを届ける仕組みです。",
+      },
+      {
+        id: "q-bgp-4",
+        question: "Web サービスのサーバ移行などで DNS の A レコード IP を切り替える際、切り替えダウンタイムや旧サーバへの残留アクセスを減らすための実務定石はどれですか？",
+        choices: [
+          "切り替え作業の数日前〜前日までに、あらかじめ対象レコードの TTL 値を短く（例: 60〜300秒）変更しておく",
+          "切り替え当日にルート DNS サーバを再起動する",
+          "サブネットマスクを /8 に広げる",
+          "DNS ではなく ARP キャッシュを書き換える",
+        ],
+        correctIndex: 0,
+        explanation:
+          "事前に TTL を短くして古いキャッシュを期限切れさせておくことで、本番切り替え後の新 IP 反映が速やかに行われます。",
+      },
+    ],
+  },
 ];
